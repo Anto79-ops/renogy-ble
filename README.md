@@ -1,6 +1,6 @@
 # Renogy BT Monitor
 
-A standalone Python application for monitoring Renogy solar devices via Bluetooth Low Energy (BLE) and publishing data to an MQTT broker with Home Assistant auto-discovery support. This code was developed for my 3 devices. Renogy Rover 40, Renogy 100 amp hour battery with heating module (RBT100LFP12SH-G1) and 1000 W pure sine wave inverter. Also use 2 BT adapters, BT-1 and BT-2. The battery and inverter are connected via the hub, sharing the same BT-2 module. The BT connections are persistent, meaning once they connect, they will remain connected. 
+A standalone Python application for monitoring Renogy solar devices via Bluetooth Low Energy (BLE) and publishing data to an MQTT broker with Home Assistant auto-discovery support. This code was developed for my 3 devices. Renogy Rover 40, Renogy 100 amp hour battery with heating module (RBT100LFP12SH-G1) and 1000 W pure sine wave inverter. Also use 2 BT adapters, BT-1 and BT-2. The battery and inverter are connected via the hub, sharing the same BT-2 module. The BT connections are persistent, meaning once they connect, they will remain connected.  The code also includes alarms and faults for each of the devices as attributes to number of fauls sensors.
 
 ## Supported Devices
 
