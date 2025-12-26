@@ -25,7 +25,7 @@ A standalone Python application for monitoring Renogy solar devices via Bluetoot
 
 - **Raspberry Pi Zero 2W** (or any Linux system with Bluetooth)
 - **Bluetooth adapter** (built-in or USB, like LM0101 long-range adapter)
-- **Renogy BT-1 or BT-2 module(s)** connected to your Renogy devices
+- **Renogy BT-1 or BT-2 module(s) or both** connected to your Renogy devices
 
 ## Installation
 
@@ -95,6 +95,13 @@ mqtt:
 # Polling Configuration
 polling:
   interval: 60  # Seconds between polls (10-600)
+
+# Bluetooth Configuration
+bluetooth:
+  adapter: "hci0"  # Bluetooth adapter to use (hci0, hci1, etc.)
+                   # Run 'hciconfig' to see available adapters
+                   # Built-in Pi adapter is usually hci0
+                   # USB adapters are usually hci1
 
 # Device Configuration
 devices:
