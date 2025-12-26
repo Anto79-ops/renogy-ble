@@ -1,0 +1,482 @@
+# ============================================================================
+# RENOGY SOLAR SHED DASHBOARD
+# ============================================================================
+# 
+# IMPORTANT: Before using this dashboard, you need to replace the entity IDs
+# with your actual entity IDs from Home Assistant.
+#
+# Your entities will be named like:
+#   sensor.renogy_rover_[device_id]_pv_power
+#   sensor.renogy_battery_[device_id]_state_of_charge
+#   sensor.renogy_inverter_[device_id]_output_power
+#
+# To find your entity IDs:
+#   1. Go to Developer Tools -> States in Home Assistant
+#   2. Filter by "renogy"
+#   3. Note the full entity IDs
+#
+# Then do a find/replace:
+#   - Replace "ROVER_ID" with your controller's device ID (e.g., "bt_th_7724620d")
+#   - Replace "BATTERY_ID" with your battery's device ID
+#   - Replace "INVERTER_ID" with your inverter's device ID
+#
+# NOTE: The custom:bar-card requires HACS installation. If you don't have it,
+#       remove or replace that card section.
+# ============================================================================
+
+views:
+  - theme: Backend-selected
+    title: Solar Shed
+    icon: mdi:solar-panel
+    type: sections
+    sections:
+      # ============================================
+      # SYSTEM OVERVIEW - At a glance status
+      # ============================================
+      - type: grid
+        cards:
+          - type: markdown
+            content: |
+              # ☀️ Solar System Overview
+              Real-time monitoring of your off-grid solar setup
+          - type: horizontal-stack
+            cards:
+              - type: entity
+                entity: sensor.renogy_battery_BATTERY_ID_state_of_charge
+                name: Battery
+                icon: mdi:battery-high
+              - type: entity
+                entity: sensor.renogy_rover_ROVER_ID_pv_power
+                name: Solar Input
+                icon: mdi:solar-power
+              - type: entity
+                entity: sensor.renogy_inverter_INVERTER_ID_output_power
+                name: AC Output
+                icon: mdi:power-plug
+          - type: gauge
+            entity: sensor.renogy_battery_BATTERY_ID_state_of_charge
+            name: Battery Level
+            min: 0
+            max: 100
+            severity:
+              green: 50
+              yellow: 25
+              red: 10
+            needle: true
+
+      # ============================================
+      # ALERTS & SYSTEM HEALTH
+      # ============================================
+      - type: grid
+        title: System Health & Alerts
+        cards:
+          - type: entities
+            title: "⚠️ Active Alerts"
+            entities:
+              - entity: sensor.renogy_rover_ROVER_ID_active_faults
+                name: Controller Faults
+                icon: mdi:alert-circle
+              - entity: sensor.renogy_rover_ROVER_ID_active_warnings
+                name: Controller Warnings
+                icon: mdi:alert
+              - entity: sensor.renogy_battery_BATTERY_ID_active_alarms
+                name: Battery Alarms
+                icon: mdi:alert-circle
+              - entity: sensor.renogy_battery_BATTERY_ID_active_warnings
+                name: Battery Warnings
+                icon: mdi:alert
+              - entity: sensor.renogy_inverter_INVERTER_ID_active_faults
+                name: Inverter Faults
+                icon: mdi:alert-circle
+            state_color: true
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.renogy_rover_ROVER_ID_active_faults
+                above: 0
+            card:
+              type: markdown
+              content: |
+                ### 🚨 Controller Faults Detected!
+                {{ state_attr('sensor.renogy_rover_ROVER_ID_active_faults', 'faults') | join(', ') | replace('_', ' ') | title }}
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.renogy_battery_BATTERY_ID_active_alarms
+                above: 0
+            card:
+              type: markdown
+              content: |
+                ### 🔋 Battery Alarms Active!
+                {{ state_attr('sensor.renogy_battery_BATTERY_ID_active_alarms', 'alarms') | join(', ') | replace('_', ' ') | title }}
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.renogy_inverter_INVERTER_ID_active_faults
+                above: 0
+            card:
+              type: markdown
+              content: |
+                ### ⚡ Inverter Faults Detected!
+                {{ state_attr('sensor.renogy_inverter_INVERTER_ID_active_faults', 'faults') | join(', ') | replace('_', ' ') | title }}
+
+      # ============================================
+      # SOLAR CHARGE CONTROLLER (Rover 40)
+      # ============================================
+      - type: grid
+        title: "☀️ Solar Charge Controller (Rover 40)"
+        cards:
+          - type: gauge
+            entity: sensor.renogy_rover_ROVER_ID_pv_power
+            name: Solar Power
+            min: 0
+            max: 500
+            severity:
+              green: 100
+              yellow: 50
+              red: 0
+            needle: true
+          - type: entities
+            title: Solar Panel Input
+            entities:
+              - entity: sensor.renogy_rover_ROVER_ID_pv_voltage
+                name: PV Voltage
+                icon: mdi:flash
+              - entity: sensor.renogy_rover_ROVER_ID_pv_current
+                name: PV Current
+                icon: mdi:current-dc
+              - entity: sensor.renogy_rover_ROVER_ID_pv_power
+                name: PV Power
+                icon: mdi:solar-power
+            state_color: true
+          - type: entities
+            title: Controller Status
+            entities:
+              - entity: sensor.renogy_rover_ROVER_ID_charging_status
+                name: Charging Mode
+                icon: mdi:battery-charging
+              - entity: sensor.renogy_rover_ROVER_ID_controller_temperature
+                name: Controller Temp
+              - entity: sensor.renogy_rover_ROVER_ID_battery_type
+                name: Battery Type
+                icon: mdi:battery-outline
+              - entity: sensor.renogy_rover_ROVER_ID_load_status
+                name: Load Output
+                icon: mdi:power-plug
+            state_color: true
+          - type: history-graph
+            title: Solar Production (24h)
+            entities:
+              - entity: sensor.renogy_rover_ROVER_ID_pv_power
+                name: PV Power
+              - entity: sensor.renogy_rover_ROVER_ID_pv_voltage
+                name: PV Voltage
+            hours_to_show: 24
+            refresh_interval: 60
+
+      # ============================================
+      # CONTROLLER - DAILY STATISTICS
+      # ============================================
+      - type: grid
+        title: "📊 Daily Statistics"
+        cards:
+          - type: statistic
+            entity: sensor.renogy_rover_ROVER_ID_power_generation_today
+            name: Energy Generated Today
+            period:
+              calendar:
+                period: day
+            stat_type: max
+          - type: statistic
+            entity: sensor.renogy_rover_ROVER_ID_max_charging_power_today
+            name: Peak Solar Power Today
+            period:
+              calendar:
+                period: day
+            stat_type: max
+          - type: entities
+            title: Today's Stats
+            entities:
+              - entity: sensor.renogy_rover_ROVER_ID_power_generation_today
+                name: Generation Today
+                icon: mdi:solar-power
+              - entity: sensor.renogy_rover_ROVER_ID_power_consumption_today
+                name: Consumption Today
+                icon: mdi:power-plug
+              - entity: sensor.renogy_rover_ROVER_ID_charging_amp_hours_today
+                name: Charge Ah Today
+                icon: mdi:battery-plus
+              - entity: sensor.renogy_rover_ROVER_ID_discharging_amp_hours_today
+                name: Discharge Ah Today
+                icon: mdi:battery-minus
+              - entity: sensor.renogy_rover_ROVER_ID_max_charging_power_today
+                name: Max Charge Power
+                icon: mdi:flash
+              - entity: sensor.renogy_rover_ROVER_ID_max_discharging_power_today
+                name: Max Discharge Power
+                icon: mdi:flash-outline
+          - type: entity
+            entity: sensor.renogy_rover_ROVER_ID_power_generation_total
+            name: Total Energy Generated
+            icon: mdi:counter
+
+      # ============================================
+      # BATTERY (LiFePO4)
+      # ============================================
+      - type: grid
+        title: "🔋 LiFePO4 Battery"
+        cards:
+          - type: gauge
+            entity: sensor.renogy_battery_BATTERY_ID_state_of_charge
+            name: State of Charge
+            min: 0
+            max: 100
+            severity:
+              green: 60
+              yellow: 30
+              red: 15
+            needle: true
+          - type: entities
+            title: Battery Status
+            entities:
+              - entity: sensor.renogy_battery_BATTERY_ID_state_of_charge
+                name: State of Charge
+                icon: mdi:battery
+              - entity: sensor.renogy_battery_BATTERY_ID_voltage
+                name: Voltage
+              - entity: sensor.renogy_battery_BATTERY_ID_current
+                name: Current
+              - entity: sensor.renogy_battery_BATTERY_ID_power
+                name: Power
+              - entity: sensor.renogy_battery_BATTERY_ID_remaining_capacity
+                name: Remaining Capacity
+              - entity: sensor.renogy_battery_BATTERY_ID_total_capacity
+                name: Total Capacity
+            state_color: true
+          - type: entities
+            title: Battery Health
+            entities:
+              - entity: sensor.renogy_battery_BATTERY_ID_battery_temperature
+                name: Temperature
+                icon: mdi:thermometer
+              - entity: binary_sensor.renogy_battery_BATTERY_ID_heater
+                name: Heater Active
+                icon: mdi:radiator
+              - entity: sensor.renogy_battery_BATTERY_ID_cell_count
+                name: Cell Count
+                icon: mdi:battery-outline
+              - entity: sensor.renogy_battery_BATTERY_ID_temperature_sensor_count
+                name: Temp Sensors
+                icon: mdi:thermometer-lines
+            state_color: true
+          - type: history-graph
+            title: Battery History (24h)
+            entities:
+              - entity: sensor.renogy_battery_BATTERY_ID_state_of_charge
+                name: SOC %
+              - entity: sensor.renogy_battery_BATTERY_ID_power
+                name: Power (W)
+            hours_to_show: 24
+            refresh_interval: 60
+
+      # ============================================
+      # BATTERY CELL VOLTAGES
+      # ============================================
+      - type: grid
+        title: "🔋 Cell Voltages"
+        cards:
+          - type: entities
+            title: Individual Cell Voltages
+            entities:
+              - entity: sensor.renogy_battery_BATTERY_ID_cell_1_voltage
+                name: Cell 1
+                icon: mdi:battery-10
+              - entity: sensor.renogy_battery_BATTERY_ID_cell_2_voltage
+                name: Cell 2
+                icon: mdi:battery-40
+              - entity: sensor.renogy_battery_BATTERY_ID_cell_3_voltage
+                name: Cell 3
+                icon: mdi:battery-70
+              - entity: sensor.renogy_battery_BATTERY_ID_cell_4_voltage
+                name: Cell 4
+                icon: mdi:battery-100
+          - type: history-graph
+            title: Cell Voltage History (24h)
+            entities:
+              - entity: sensor.renogy_battery_BATTERY_ID_cell_1_voltage
+                name: Cell 1
+              - entity: sensor.renogy_battery_BATTERY_ID_cell_2_voltage
+                name: Cell 2
+              - entity: sensor.renogy_battery_BATTERY_ID_cell_3_voltage
+                name: Cell 3
+              - entity: sensor.renogy_battery_BATTERY_ID_cell_4_voltage
+                name: Cell 4
+            hours_to_show: 24
+            refresh_interval: 60
+
+      # ============================================
+      # INVERTER (1000W PGH1)
+      # ============================================
+      - type: grid
+        title: "⚡ Inverter (1000W)"
+        cards:
+          - type: gauge
+            entity: sensor.renogy_inverter_INVERTER_ID_output_power
+            name: AC Output Power
+            min: 0
+            max: 1000
+            severity:
+              green: 0
+              yellow: 700
+              red: 900
+            needle: true
+          - type: entities
+            title: AC Output
+            entities:
+              - entity: sensor.renogy_inverter_INVERTER_ID_output_voltage
+                name: Output Voltage
+                icon: mdi:flash
+              - entity: sensor.renogy_inverter_INVERTER_ID_output_current
+                name: Output Current
+                icon: mdi:current-ac
+              - entity: sensor.renogy_inverter_INVERTER_ID_output_power
+                name: Output Power
+                icon: mdi:power-plug
+              - entity: sensor.renogy_inverter_INVERTER_ID_output_frequency
+                name: Frequency
+                icon: mdi:sine-wave
+            state_color: true
+          - type: entities
+            title: Inverter Status
+            entities:
+              - entity: sensor.renogy_inverter_INVERTER_ID_battery_voltage
+                name: DC Input Voltage
+                icon: mdi:car-battery
+              - entity: sensor.renogy_inverter_INVERTER_ID_temperature
+                name: Temperature
+                icon: mdi:thermometer
+              - entity: binary_sensor.renogy_inverter_INVERTER_ID_eco_mode
+                name: ECO Mode
+                icon: mdi:leaf
+              - entity: binary_sensor.renogy_inverter_INVERTER_ID_beeper
+                name: Beeper
+                icon: mdi:volume-high
+              - entity: sensor.renogy_inverter_INVERTER_ID_active_faults
+                name: Active Faults
+                icon: mdi:alert-circle
+            state_color: true
+          - type: history-graph
+            title: Inverter Load (24h)
+            entities:
+              - entity: sensor.renogy_inverter_INVERTER_ID_output_power
+                name: AC Power
+              - entity: sensor.renogy_inverter_INVERTER_ID_output_current
+                name: AC Current
+            hours_to_show: 24
+            refresh_interval: 60
+
+      # ============================================
+      # TEMPERATURES
+      # ============================================
+      - type: grid
+        title: "🌡️ System Temperatures"
+        cards:
+          - type: entities
+            title: All Temperatures
+            entities:
+              - entity: sensor.renogy_rover_ROVER_ID_controller_temperature
+                name: Charge Controller
+                icon: mdi:chip
+              - entity: sensor.renogy_rover_ROVER_ID_battery_temperature
+                name: Battery (Controller)
+                icon: mdi:battery-heart
+              - entity: sensor.renogy_battery_BATTERY_ID_battery_temperature
+                name: Battery (BMS)
+                icon: mdi:thermometer
+              - entity: sensor.renogy_inverter_INVERTER_ID_temperature
+                name: Inverter
+                icon: mdi:power-plug
+            state_color: true
+          - type: history-graph
+            title: Temperature History (24h)
+            entities:
+              - entity: sensor.renogy_rover_ROVER_ID_controller_temperature
+                name: Controller
+              - entity: sensor.renogy_battery_BATTERY_ID_battery_temperature
+                name: Battery
+              - entity: sensor.renogy_inverter_INVERTER_ID_temperature
+                name: Inverter
+            hours_to_show: 24
+            refresh_interval: 60
+
+      # ============================================
+      # POWER FLOW VISUALIZATION
+      # ============================================
+      - type: grid
+        title: "🔄 Power Flow"
+        cards:
+          - type: markdown
+            content: |
+              ## Power Flow Summary
+
+              | Source | Current | Status |
+              |--------|---------|--------|
+              | ☀️ **Solar** | {{ states('sensor.renogy_rover_ROVER_ID_pv_power') }} W | {{ states('sensor.renogy_rover_ROVER_ID_charging_status') }} |
+              | 🔋 **Battery** | {{ states('sensor.renogy_battery_BATTERY_ID_power') }} W | {{ states('sensor.renogy_battery_BATTERY_ID_state_of_charge') }}% |
+              | ⚡ **Inverter** | {{ states('sensor.renogy_inverter_INVERTER_ID_output_power') }} W | {% if is_state('binary_sensor.renogy_inverter_INVERTER_ID_eco_mode', 'on') %}ECO{% else %}Normal{% endif %} |
+
+              ---
+
+              **Net Power:** 
+              {% set solar = states('sensor.renogy_rover_ROVER_ID_pv_power') | float(0) %}
+              {% set load = states('sensor.renogy_inverter_INVERTER_ID_output_power') | float(0) %}
+              {% set net = solar - load %}
+              {% if net > 0 %}🟢 +{{ net | round(1) }} W (Charging)
+              {% elif net < 0 %}🔴 {{ net | round(1) }} W (Discharging)
+              {% else %}⚪ Balanced
+              {% endif %}
+          - type: history-graph
+            title: Power Balance (24h)
+            entities:
+              - entity: sensor.renogy_rover_ROVER_ID_pv_power
+                name: Solar In
+              - entity: sensor.renogy_battery_BATTERY_ID_power
+                name: Battery
+              - entity: sensor.renogy_inverter_INVERTER_ID_output_power
+                name: AC Out
+            hours_to_show: 24
+            refresh_interval: 60
+
+      # ============================================
+      # VOLTAGE MONITORING
+      # ============================================
+      - type: grid
+        title: "📈 System Voltages"
+        cards:
+          - type: entities
+            title: Voltage Readings
+            entities:
+              - entity: sensor.renogy_rover_ROVER_ID_pv_voltage
+                name: Solar Panel
+                icon: mdi:solar-panel
+              - entity: sensor.renogy_rover_ROVER_ID_battery_voltage
+                name: Battery (Controller)
+                icon: mdi:car-battery
+              - entity: sensor.renogy_battery_BATTERY_ID_voltage
+                name: Battery (BMS)
+                icon: mdi:battery
+              - entity: sensor.renogy_inverter_INVERTER_ID_battery_voltage
+                name: Battery (Inverter)
+                icon: mdi:power-plug
+              - entity: sensor.renogy_inverter_INVERTER_ID_output_voltage
+                name: AC Output
+                icon: mdi:flash
+          - type: history-graph
+            title: Voltage History (24h)
+            entities:
+              - entity: sensor.renogy_rover_ROVER_ID_pv_voltage
+                name: PV
+              - entity: sensor.renogy_battery_BATTERY_ID_voltage
+                name: Battery
+            hours_to_show: 24
+            refresh_interval: 60
