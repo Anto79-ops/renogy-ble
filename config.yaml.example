@@ -1,0 +1,73 @@
+# Renogy BT Monitor Configuration
+# Copy this file to config.yaml and update with your settings
+
+# MQTT Broker Configuration
+mqtt:
+  host: "homeassistant.local"  # Or IP address like 192.168.1.100
+  port: 1883
+  username: "your_mqtt_username"  # Leave empty if no auth required
+  password: "your_mqtt_password"  # Leave empty if no auth required
+  discovery_prefix: "homeassistant"  # Home Assistant MQTT discovery prefix
+  topic_prefix: "renogy"  # Base topic for publishing data
+
+# Polling Configuration
+polling:
+  interval: 60  # Polling interval in seconds (10-600)
+  retry_attempts: 3  # Number of retry attempts on connection failure
+  retry_delay: 5  # Delay between retries in seconds
+
+# Bluetooth Configuration
+bluetooth:
+  adapter: "hci0"  # Bluetooth adapter to use (hci0, hci1, etc.)
+                   # Run 'hciconfig' to see available adapters
+                   # Built-in Pi adapter is usually hci0
+                   # USB adapters are usually hci1
+
+# Device Configuration
+# Each device should have:
+#   - name: Friendly name for the device
+#   - mac_address: Bluetooth MAC address (format: XX:XX:XX:XX:XX:XX)
+#   - alias: Bluetooth device alias (e.g., BT-TH-XXXXXXXX)
+#   - type: Device type (controller, battery, inverter)
+#   - device_id: Modbus device ID (see table below)
+#   - adapter: BT module type (bt1 or bt2)
+#
+# Device ID Guide (for Hub mode with Communication Hub):
+#   | Device Type | Stand-alone | Daisy-chained | Hub mode |
+#   |-------------|-------------|---------------|----------|
+#   | Controller  | 255, 17     | 16, 17        | 96, 97   |
+#   | Battery     | 255         | 33, 34, 35    | 48, 49   |
+#   | Inverter    | 255, 32     | 32            | 32       |
+#
+# If using separate BT modules (one per device), use device_id: 255
+
+devices:
+  # Example: Charge Controller with BT-1
+  - name: "Solar Charge Controller"
+    mac_address: "XX:XX:XX:XX:XX:XX"
+    alias: "BT-TH-F25D5D87"
+    type: "controller"
+    device_id: 255  # Use 96 or 97 for Hub mode
+    adapter: "bt1"
+
+  # Example: Battery with BT-2 (Hub mode)
+  # - name: "Main Battery"
+  #   mac_address: "XX:XX:XX:XX:XX:XX"
+  #   alias: "BT-TH-XXXXXXXX"
+  #   type: "battery"
+  #   device_id: 48  # Hub mode address for battery
+  #   adapter: "bt2"
+
+  # Example: Inverter with BT-2 (Hub mode)
+  # - name: "Power Inverter"
+  #   mac_address: "XX:XX:XX:XX:XX:XX"
+  #   alias: "BT-TH-XXXXXXXX"
+  #   type: "inverter"
+  #   device_id: 32  # Hub mode address for inverter
+  #   adapter: "bt2"
+
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file: "/var/log/renogy_monitor.log"  # Log file path (optional)
+  console: true  # Also log to console

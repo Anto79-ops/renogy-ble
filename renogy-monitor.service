@@ -1,0 +1,32 @@
+[Unit]
+Description=Renogy BT Monitor - Solar Device Monitoring via Bluetooth
+Documentation=https://github.com/your-repo/renogy_monitor
+After=network.target bluetooth.target
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/renogy_monitor
+Environment="PATH=/home/pi/renogy_monitor/venv/bin:/usr/bin"
+ExecStart=/home/pi/renogy_monitor/venv/bin/python main.py config.yaml
+Restart=always
+RestartSec=30
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=renogy-monitor
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pi/renogy_monitor
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
