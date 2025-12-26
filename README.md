@@ -100,8 +100,8 @@ polling:
 devices:
   # Charge Controller with BT-1 module
   - name: "Solar Charge Controller"
-    mac_address: "F0:F8:F2:5D:5D:87"
-    alias: "BT-TH-F25D5D87"
+    mac_address: "XX:XX:XX:XX:XX:XX"
+    alias: "BT-TH-FXXXXXXX"
     type: "controller"
     device_id: 255
     adapter: "bt1"
@@ -158,12 +158,12 @@ Example output:
 ```
 Found 2 Renogy device(s):
 
-1. Name: BT-TH-F25D5D87
-   MAC Address: F0:F8:F2:5D:5D:87
+1. Name: BT-TH-FXXXXXXX
+   MAC Address: XX:XX:XX:XX:XX:XX
    Signal Strength: -65 dBm
 
-2. Name: BT-TH-ABCD1234
-   MAC Address: AA:BB:CC:DD:12:34
+2. Name: BT-TH-ACCCCCCC
+   MAC Address: XX:XX:XX:XX:XX:XX
    Signal Strength: -72 dBm
 ```
 
