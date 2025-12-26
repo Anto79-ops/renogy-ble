@@ -366,6 +366,9 @@ This project is based on research and code from:
 - [IAmTheMitchell/renogy-ha](https://github.com/IAmTheMitchell/renogy-ha)
 
 Modbus protocol documentation from Renogy/RongSi.
+ - https://github.com/cyrils/renogy-bt/discussions/94#discussion-7598651
+
+AI was used to create this project.
 
 ## License
 
