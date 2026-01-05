@@ -35,7 +35,7 @@ Battery Alarms
 
 ## Hardware Requirements
 
-- **Raspberry Pi (Pi Zero 2W, 4 or 4)** (or any Linux system with Bluetooth)
+- **Raspberry Pi (Pi Zero 2W, 4 or 5)** (or any Linux system with Bluetooth)
 - **Bluetooth adapter** (built-in or USB, like LM0101 long-range adapter)
 - **Renogy BT-1 or BT-2 module(s) or both** connected to your Renogy devices
 
