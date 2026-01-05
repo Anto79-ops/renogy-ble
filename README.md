@@ -21,6 +21,16 @@ A standalone Python application for monitoring Renogy solar devices via Bluetoot
 - 📝 Detailed logging
 - 🛡️ Automatic reconnection on connection loss
 
+## Dashboard Example
+
+Included in dashboard yaml file.
+
+Whole Dashboard
+<img width="1423" height="875" alt="image" src="https://github.com/user-attachments/assets/e0aeec3c-43be-47bf-aebc-4699dfbbf3a6" />
+
+Battery Alarms
+<img width="452" height="631" alt="image" src="https://github.com/user-attachments/assets/c0e2d582-497a-4be2-8be9-bbebbe2b7d1a" />
+
 ## Hardware Requirements
 
 - **Raspberry Pi Zero 2W** (or any Linux system with Bluetooth)
