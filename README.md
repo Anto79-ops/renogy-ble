@@ -33,6 +33,10 @@ Battery Alarms
 
 <img width="452" height="631" alt="image" src="https://github.com/user-attachments/assets/c0e2d582-497a-4be2-8be9-bbebbe2b7d1a" />
 
+Data Validation Sensor (last 100 rejections, for Rover 40 Controller only)
+
+<img width="451" height="757" alt="image" src="https://github.com/user-attachments/assets/852480b3-2a67-4048-8d87-28cefb108555" />
+
 ## Hardware Requirements
 
 - **Raspberry Pi (Pi Zero 2W, 4 or 5)** (or any Linux system with Bluetooth)
