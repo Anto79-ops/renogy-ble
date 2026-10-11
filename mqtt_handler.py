@@ -338,7 +338,7 @@ class MQTTHandler:
             "name": device_name,
             "manufacturer": "Renogy",
             "model": model or device_type.title(),
-            "sw_version": "1.3.0",
+            "sw_version": "1.3.1",
         }
         
         # Get sensor definitions for this device type
