@@ -179,7 +179,7 @@ class MQTTHandler:
     
     def __init__(self, config: MQTTConfig):
         self.config = config
-        self.client = mqtt.Client(client_id=config.client_id)
+        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=config.client_id)
         self._connected = False
         self._discovery_sent: Dict[str, set] = {}  # Track which sensors have been announced
         
@@ -191,6 +191,12 @@ class MQTTHandler:
         # Setup authentication
         if config.username and config.password:
             self.client.username_pw_set(config.username, config.password)
+
+        # Bridge availability: the broker marks the monitor offline if the Pi
+        # or this process dies, so Home Assistant does not keep showing the
+        # last retained values as if they were current.
+        self.bridge_topic = f"{config.topic_prefix}/bridge/availability"
+        self.client.will_set(self.bridge_topic, "offline", qos=1, retain=True)
     
     def connect(self) -> bool:
         """Connect to the MQTT broker."""
@@ -214,21 +220,24 @@ class MQTTHandler:
     
     def disconnect(self):
         """Disconnect from the MQTT broker."""
+        # A clean disconnect does not trigger the will, so say it ourselves
+        self.client.publish(self.bridge_topic, "offline", qos=1, retain=True).wait_for_publish(2)
         self.client.loop_stop()
         self.client.disconnect()
         self._connected = False
         logger.info("Disconnected from MQTT broker")
     
-    def _on_connect(self, client, userdata, flags, rc):
+    def _on_connect(self, client, userdata, flags, rc, properties=None):
         """Callback when connected to broker."""
         if rc == 0:
             logger.info("Connected to MQTT broker")
             self._connected = True
+            client.publish(self.bridge_topic, "online", qos=1, retain=True)
         else:
             logger.error(f"MQTT connection failed with code {rc}")
             self._connected = False
     
-    def _on_disconnect(self, client, userdata, rc):
+    def _on_disconnect(self, client, userdata, flags, rc, properties=None):
         """Callback when disconnected from broker."""
         logger.warning(f"Disconnected from MQTT broker (rc={rc})")
         self._connected = False
@@ -237,6 +246,17 @@ class MQTTHandler:
         """Callback for received messages."""
         logger.debug(f"Received message on {message.topic}: {message.payload}")
     
+    def _availability(self, device_id: str) -> Dict[str, Any]:
+        """Discovery fields: available only while the monitor is running AND
+        the device answered its last polls."""
+        return {
+            "availability": [
+                {"topic": self.bridge_topic},
+                {"topic": f"{self.config.topic_prefix}/{device_id}/availability"},
+            ],
+            "availability_mode": "all",
+        }
+
     def _get_device_id(self, device_name: str, mac_address: str) -> str:
         """Generate a unique device ID from name and MAC."""
         # Use last 6 chars of MAC (without colons) for unique ID
@@ -268,7 +288,7 @@ class MQTTHandler:
             "name": device_name,
             "manufacturer": "Renogy",
             "model": model or device_type.title(),
-            "sw_version": "1.0",
+            "sw_version": "1.1.0",
         }
         
         # Get sensor definitions for this device type
@@ -295,6 +315,7 @@ class MQTTHandler:
                 "state_topic": state_topic,
                 "value_template": f"{{{{ value_json.{sensor_key} | default(none) }}}}",
                 "device": device_info,
+                **self._availability(device_id),
             }
             
             # Add optional fields
@@ -360,6 +381,7 @@ class MQTTHandler:
                 "payload_on": "ON",
                 "payload_off": "OFF",
                 "device": device_info,
+                **self._availability(device_id),
             }
             
             if sensor.get('device_class'):
@@ -386,7 +408,7 @@ class MQTTHandler:
         # For batteries, cell voltage discovery happens dynamically in publish_state
         # based on actual cell_count from device data
         
-        logger.info(f"Discovery messages sent for {device_name}")
+        logger.debug(f"Discovery checked for {device_name}")
     
     def publish_state(self, device_name: str, mac_address: str, data: Dict[str, Any]):
         """
@@ -471,7 +493,7 @@ class MQTTHandler:
                 "device_class": "voltage",
                 "unit_of_measurement": "V",
                 "state_class": "measurement",
-                "availability_topic": f"{self.config.topic_prefix}/{device_id}/availability",
+                **self._availability(device_id),
             }
             
             discovery_topic = (
@@ -522,7 +544,7 @@ class MQTTHandler:
                 "device_class": "temperature",
                 "unit_of_measurement": "°C",
                 "state_class": "measurement",
-                "availability_topic": f"{self.config.topic_prefix}/{device_id}/availability",
+                **self._availability(device_id),
             }
             
             discovery_topic = (
