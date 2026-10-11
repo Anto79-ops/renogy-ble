@@ -62,8 +62,33 @@ CONTROLLER_SENSORS = [
     {'key': 'power_generation_today', 'name': 'Power Generation Today', 'device_class': 'energy', 'unit': 'Wh', 'state_class': 'total_increasing'},
     {'key': 'power_consumption_today', 'name': 'Power Consumption Today', 'device_class': 'energy', 'unit': 'Wh', 'state_class': 'total_increasing'},
     
+    {'key': 'battery_min_voltage_today', 'name': 'Battery Min Voltage Today', 'device_class': 'voltage', 'unit': 'V', 'state_class': 'measurement'},
+    {'key': 'battery_max_voltage_today', 'name': 'Battery Max Voltage Today', 'device_class': 'voltage', 'unit': 'V', 'state_class': 'measurement'},
+    {'key': 'max_charging_current_today', 'name': 'Max Charging Current Today', 'device_class': 'current', 'unit': 'A', 'state_class': 'measurement'},
+    {'key': 'max_discharging_current_today', 'name': 'Max Discharging Current Today', 'device_class': 'current', 'unit': 'A', 'state_class': 'measurement'},
+    
     # Totals
     {'key': 'power_generation_total', 'name': 'Power Generation Total', 'device_class': 'energy', 'unit': 'Wh', 'state_class': 'total_increasing'},
+    {'key': 'power_consumption_total', 'name': 'Power Consumption Total', 'device_class': 'energy', 'unit': 'Wh', 'state_class': 'total_increasing'},
+    {'key': 'charging_amp_hours_total', 'name': 'Charging Ah Total', 'device_class': None, 'unit': 'Ah', 'state_class': 'total_increasing', 'icon': 'mdi:battery-plus'},
+    {'key': 'discharging_amp_hours_total', 'name': 'Discharging Ah Total', 'device_class': None, 'unit': 'Ah', 'state_class': 'total_increasing', 'icon': 'mdi:battery-minus'},
+    {'key': 'operating_days', 'name': 'Operating Days', 'device_class': None, 'unit': 'd', 'state_class': 'total_increasing', 'icon': 'mdi:calendar-clock'},
+    {'key': 'over_discharge_count', 'name': 'Over-Discharge Count', 'device_class': None, 'unit': None, 'state_class': 'total_increasing', 'icon': 'mdi:battery-alert'},
+    {'key': 'full_charge_count', 'name': 'Full Charge Count', 'device_class': None, 'unit': None, 'state_class': 'total_increasing', 'icon': 'mdi:battery-check'},
+
+    # Charge settings (0xE005-0xE00E) and versions - diagnostic
+    {'key': 'boost_voltage', 'name': 'Boost Charge Voltage', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'float_voltage', 'name': 'Float Charge Voltage', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'equalizing_voltage', 'name': 'Equalizing Voltage', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'charge_limit_voltage', 'name': 'Charge Limit Voltage', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'overvoltage_threshold', 'name': 'Over-Voltage Threshold', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'boost_return_voltage', 'name': 'Boost Return Voltage', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'over_discharge_recovery_voltage', 'name': 'Over-Discharge Recovery Voltage', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'undervoltage_warning_voltage', 'name': 'Under-Voltage Warning Voltage', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'over_discharge_voltage', 'name': 'Over-Discharge Voltage', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'discharge_limit_voltage', 'name': 'Discharge Limit Voltage', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'firmware_version', 'name': 'Firmware Version', 'device_class': None, 'unit': None, 'icon': 'mdi:chip', 'entity_category': 'diagnostic'},
+    {'key': 'hardware_version', 'name': 'Hardware Version', 'device_class': None, 'unit': None, 'icon': 'mdi:chip', 'entity_category': 'diagnostic'},
     
     # Faults and Warnings - with json_attributes for details
     {'key': 'fault_count', 'name': 'Active Faults', 'device_class': None, 'unit': None, 'icon': 'mdi:alert-circle',
@@ -80,11 +105,18 @@ BATTERY_SENSORS = [
     {'key': 'soc', 'name': 'State of Charge', 'device_class': 'battery', 'unit': '%', 'state_class': 'measurement'},
     {'key': 'remaining_capacity', 'name': 'Remaining Capacity', 'device_class': None, 'unit': 'Ah', 'state_class': 'measurement'},
     {'key': 'total_capacity', 'name': 'Total Capacity', 'device_class': None, 'unit': 'Ah', 'state_class': 'measurement'},
-    # Note: cycle_count requires register 5048 which may not be read by current register groups
-    # {'key': 'cycle_count', 'name': 'Cycle Count', 'device_class': None, 'unit': 'cycles', 'state_class': 'total_increasing', 'icon': 'mdi:counter'},
+    {'key': 'cycle_count', 'name': 'Cycle Count', 'device_class': None, 'unit': 'cycles', 'state_class': 'total_increasing', 'icon': 'mdi:counter'},
+    {'key': 'charge_voltage_limit', 'name': 'Charge Voltage Limit', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'discharge_voltage_limit', 'name': 'Discharge Voltage Limit', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'charge_current_limit', 'name': 'Charge Current Limit', 'device_class': 'current', 'unit': 'A', 'entity_category': 'diagnostic'},
+    {'key': 'discharge_current_limit', 'name': 'Discharge Current Limit', 'device_class': 'current', 'unit': 'A', 'entity_category': 'diagnostic'},
+    {'key': 'serial_number', 'name': 'Serial Number', 'device_class': None, 'unit': None, 'icon': 'mdi:identifier', 'entity_category': 'diagnostic'},
+    {'key': 'firmware_version', 'name': 'Firmware Version', 'device_class': None, 'unit': None, 'icon': 'mdi:chip', 'entity_category': 'diagnostic'},
     
     # Temperature sensors
     {'key': 'battery_temperature', 'name': 'Battery Temperature', 'device_class': 'temperature', 'unit': '°C', 'state_class': 'measurement'},
+    {'key': 'environment_temperature', 'name': 'Ambient Temperature', 'device_class': 'temperature', 'unit': '°C', 'state_class': 'measurement'},
+    {'key': 'heater_temperature', 'name': 'Heater Temperature', 'device_class': 'temperature', 'unit': '°C', 'state_class': 'measurement'},
     
     # Cell info
     {'key': 'cell_count', 'name': 'Cell Count', 'device_class': None, 'unit': None, 'icon': 'mdi:battery-outline'},
@@ -100,6 +132,11 @@ BATTERY_SENSORS = [
 # Binary sensors for battery
 BATTERY_BINARY_SENSORS = [
     {'key': 'heater_on', 'name': 'Heater', 'device_class': 'heat', 'icon': 'mdi:radiator'},
+    {'key': 'charge_mosfet', 'name': 'Charge MOSFET', 'device_class': 'power', 'icon': 'mdi:battery-charging', 'on_value': 'on'},
+    {'key': 'discharge_mosfet', 'name': 'Discharge MOSFET', 'device_class': 'power', 'icon': 'mdi:battery-arrow-down', 'on_value': 'on'},
+    {'key': 'charge_enabled', 'name': 'Charging Allowed', 'device_class': None, 'icon': 'mdi:battery-plus-outline'},
+    {'key': 'discharge_enabled', 'name': 'Discharging Allowed', 'device_class': None, 'icon': 'mdi:battery-minus-outline'},
+    {'key': 'fully_charged', 'name': 'Fully Charged', 'device_class': None, 'icon': 'mdi:battery-check'},
 ]
 
 INVERTER_SENSORS = [
@@ -148,6 +185,8 @@ INVERTER_SENSORS = [
     # {'key': 'pv_generation_total', 'name': 'PV Generation Total', 'device_class': 'energy', 'unit': 'kWh', 'state_class': 'total_increasing'},
     # {'key': 'load_consumption_total', 'name': 'Load Consumption Total', 'device_class': 'energy', 'unit': 'kWh', 'state_class': 'total_increasing'},
     
+    {'key': 'firmware_version', 'name': 'Firmware Version', 'device_class': None, 'unit': None, 'icon': 'mdi:chip', 'entity_category': 'diagnostic'},
+
     # Fault - with json_attributes for fault details
     {'key': 'fault_count', 'name': 'Active Faults', 'device_class': None, 'unit': None, 'icon': 'mdi:alert-circle',
      'json_attributes': ['faults']},
@@ -288,7 +327,7 @@ class MQTTHandler:
             "name": device_name,
             "manufacturer": "Renogy",
             "model": model or device_type.title(),
-            "sw_version": "1.1.0",
+            "sw_version": "1.2.0",
         }
         
         # Get sensor definitions for this device type
@@ -327,6 +366,8 @@ class MQTTHandler:
                 discovery_payload["state_class"] = sensor['state_class']
             if sensor.get('icon'):
                 discovery_payload["icon"] = sensor['icon']
+            if sensor.get('entity_category'):
+                discovery_payload["entity_category"] = sensor['entity_category']
             
             # Add json_attributes_topic if sensor has json_attributes defined
             # This allows alarm/fault details to be shown as entity attributes
@@ -377,7 +418,11 @@ class MQTTHandler:
                 "name": sensor['name'],
                 "unique_id": unique_id,
                 "state_topic": state_topic,
-                "value_template": f"{{{{ 'ON' if value_json.{sensor_key} | default(false) else 'OFF' }}}}",
+                "value_template": (
+                    f"{{{{ 'ON' if value_json.{sensor_key} | default('') == '{sensor['on_value']}' else 'OFF' }}}}"
+                    if sensor.get('on_value') else
+                    f"{{{{ 'ON' if value_json.{sensor_key} | default(false) else 'OFF' }}}}"
+                ),
                 "payload_on": "ON",
                 "payload_off": "OFF",
                 "device": device_info,

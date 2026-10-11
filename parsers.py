@@ -51,14 +51,18 @@ CONTROLLER_BATTERY_TYPE = {
 }
 
 # Controller register sections to read
+# 'once': static values, read on the first successful poll only
 CONTROLLER_REGISTERS = [
-    {'name': 'device_info', 'register': 12, 'words': 8},
-    {'name': 'device_id', 'register': 26, 'words': 1},
+    {'name': 'device_info', 'register': 12, 'words': 8, 'once': True},
+    {'name': 'versions', 'register': 20, 'words': 4, 'once': True},  # 0x0014-0x0017
+    {'name': 'device_id', 'register': 26, 'words': 1, 'once': True},
     {'name': 'charging_info', 'register': 256, 'words': 34},
     {'name': 'faults', 'register': 289, 'words': 2},  # 0x0121-0x0122: Fault and warning bits
-    {'name': 'battery_type', 'register': 57348, 'words': 1},
-    # Historical data (optional)
-    {'name': 'historical', 'register': 60000, 'words': 21},
+    # 0xE004-0xE00E: battery type and the charge/discharge voltage settings
+    {'name': 'settings', 'register': 57348, 'words': 11},
+    # Note: register 60000 (0xEA60), read as "historical" before 1.2.0, is not
+    # the 7-day history (it returns settings). Daily history is at 0xF000 + n
+    # (n days ago, 10 words each) and is not read: Home Assistant keeps history.
 ]
 
 
@@ -114,6 +118,10 @@ def parse_controller_charging_info(data: bytes, offset: int = 3) -> Dict[str, An
     result['pv_power'] = bytes_to_int(data, offset + 18, 2)
     
     # Daily statistics
+    result['battery_min_voltage_today'] = bytes_to_int(data, offset + 22, 2, scale=0.1)
+    result['battery_max_voltage_today'] = bytes_to_int(data, offset + 24, 2, scale=0.1)
+    result['max_charging_current_today'] = bytes_to_int(data, offset + 26, 2, scale=0.01)
+    result['max_discharging_current_today'] = bytes_to_int(data, offset + 28, 2, scale=0.01)
     result['max_charging_power_today'] = bytes_to_int(data, offset + 30, 2)
     result['max_discharging_power_today'] = bytes_to_int(data, offset + 32, 2)
     result['charging_amp_hours_today'] = bytes_to_int(data, offset + 34, 2)
@@ -121,8 +129,14 @@ def parse_controller_charging_info(data: bytes, offset: int = 3) -> Dict[str, An
     result['power_generation_today'] = bytes_to_int(data, offset + 38, 2)
     result['power_consumption_today'] = bytes_to_int(data, offset + 40, 2)
     
-    # Cumulative totals (4 bytes)
+    # Lifetime counters (0x0115-0x011F)
+    result['operating_days'] = bytes_to_int(data, offset + 42, 2)
+    result['over_discharge_count'] = bytes_to_int(data, offset + 44, 2)
+    result['full_charge_count'] = bytes_to_int(data, offset + 46, 2)
+    result['charging_amp_hours_total'] = bytes_to_int(data, offset + 48, 4)
+    result['discharging_amp_hours_total'] = bytes_to_int(data, offset + 52, 4)
     result['power_generation_total'] = bytes_to_int(data, offset + 56, 4)
+    result['power_consumption_total'] = bytes_to_int(data, offset + 60, 4)
     
     # Status
     load_status_byte = bytes_to_int(data, offset + 64, 1)
@@ -134,14 +148,47 @@ def parse_controller_charging_info(data: bytes, offset: int = 3) -> Dict[str, An
     return result
 
 
+def parse_controller_versions(data: bytes, offset: int = 3) -> Dict[str, Any]:
+    """Parse software and hardware version (registers 0x0014-0x0017).
+    Each is 4 bytes: 00, major, minor, patch."""
+    result = {}
+    if len(data) < offset + 8:
+        return result
+    sw = data[offset:offset + 4]
+    hw = data[offset + 4:offset + 8]
+    result['firmware_version'] = f"{sw[1]}.{sw[2]}.{sw[3]}"
+    result['hardware_version'] = f"{hw[1]}.{hw[2]}.{hw[3]}"
+    return result
+
+
+# 0xE005-0xE00E, 0.1 V each (the values of a 12 V system)
+CONTROLLER_VOLTAGE_SETTINGS = [
+    'overvoltage_threshold',            # 0xE005
+    'charge_limit_voltage',             # 0xE006
+    'equalizing_voltage',               # 0xE007
+    'boost_voltage',                    # 0xE008
+    'float_voltage',                    # 0xE009
+    'boost_return_voltage',             # 0xE00A
+    'over_discharge_recovery_voltage',  # 0xE00B
+    'undervoltage_warning_voltage',     # 0xE00C
+    'over_discharge_voltage',           # 0xE00D
+    'discharge_limit_voltage',          # 0xE00E
+]
+
+
 def parse_controller_battery_type(data: bytes, offset: int = 3) -> Dict[str, Any]:
-    """Parse controller battery type (register 57348 / 0xE004)."""
+    """Parse controller battery type (0xE004) and, when read together, the
+    charge/discharge voltage settings (0xE005-0xE00E)."""
     result = {}
     if len(data) < offset + 2:
         return result
     
     battery_type_val = bytes_to_int(data, offset, 2)
     result['battery_type'] = CONTROLLER_BATTERY_TYPE.get(battery_type_val, 'unknown')
+    for i, key in enumerate(CONTROLLER_VOLTAGE_SETTINGS):
+        pos = offset + 2 + i * 2
+        if pos + 2 <= len(data) - 2:  # stop before the CRC
+            result[key] = bytes_to_int(data, pos, 2, scale=0.1)
     return result
 
 
@@ -295,9 +342,10 @@ def parse_controller_historical(data: bytes, offset: int = 3) -> Dict[str, Any]:
 BATTERY_REGISTERS = [
     {'name': 'cell_info', 'register': 5000, 'words': 17},      # Cell voltages and count
     {'name': 'temp_info', 'register': 5017, 'words': 17},      # Temperature sensors
-    {'name': 'battery_info', 'register': 5042, 'words': 8},    # Current, voltage, capacity
+    {'name': 'more_temps', 'register': 5035, 'words': 7},      # BMS board, ambient and heater temperatures
+    {'name': 'battery_info', 'register': 5042, 'words': 11},   # Current, voltage, capacity, cycles, limits
     {'name': 'status_info', 'register': 5100, 'words': 10},    # Alarms and status flags  
-    {'name': 'device_info', 'register': 5122, 'words': 8},     # Battery name/model
+    {'name': 'device_info', 'register': 5110, 'words': 22, 'once': True},  # Serial, model, firmware
 ]
 
 
@@ -383,7 +431,36 @@ def parse_battery_info(data: bytes, offset: int = 3) -> Dict[str, Any]:
     
     # Power calculation (W)
     result['power'] = round(result.get('voltage', 0) * result.get('current', 0), 1)
+
+    # Registers 5048-5052 (when read): cycles and the BMS charge/discharge limits
+    if len(data) >= offset + 22:
+        result['cycle_count'] = bytes_to_int(data, offset + 12, 2)
+        result['charge_voltage_limit'] = bytes_to_int(data, offset + 14, 2, scale=0.1)
+        result['discharge_voltage_limit'] = bytes_to_int(data, offset + 16, 2, scale=0.1)
+        result['charge_current_limit'] = bytes_to_int(data, offset + 18, 2, scale=0.01)
+        # stored negative (discharge direction)
+        result['discharge_current_limit'] = abs(bytes_to_int(data, offset + 20, 2, scale=0.01, signed=True))
     
+    return result
+
+
+def parse_battery_more_temps(data: bytes, offset: int = 3) -> Dict[str, Any]:
+    """
+    Parse registers 5035-5041: BMS board temperature, then a count and up to
+    two values each for ambient (environment) and heater temperature sensors.
+    0.1 degC, signed.
+    """
+    result = {}
+    if len(data) < offset + 14:
+        return result
+
+    def temp(pos):
+        return round(bytes_to_int(data, offset + pos, 2, signed=True) * 0.1, 1)
+
+    if bytes_to_int(data, offset + 2, 2) >= 1:   # 5036: ambient sensor count
+        result['environment_temperature'] = temp(4)
+    if bytes_to_int(data, offset + 8, 2) >= 1:   # 5039: heater sensor count
+        result['heater_temperature'] = temp(10)
     return result
 
 
@@ -618,13 +695,15 @@ def add_software_temperature_warnings(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def parse_battery_device_info(data: bytes, offset: int = 3) -> Dict[str, Any]:
-    """Parse battery device info (registers 5122-5129)."""
+    """Parse battery device info (registers 5110-5131): serial number
+    (5110-5121), model (5122-5129) and firmware version (5130-5131), ASCII."""
     result = {}
-    if len(data) < offset + 16:
+    if len(data) < offset + 44:
         return result
     
-    # Battery name/model (ASCII, registers 5122-5129, 16 bytes)
-    result['model'] = bytes_to_ascii(data, offset, 16).strip('\x00')
+    result['serial_number'] = bytes_to_ascii(data, offset, 24)
+    result['model'] = bytes_to_ascii(data, offset + 24, 16).strip('\x00')
+    result['firmware_version'] = bytes_to_ascii(data, offset + 40, 4)
     
     return result
 
@@ -659,7 +738,7 @@ INVERTER_MACHINE_STATE = {
 INVERTER_REGISTERS = [
     # Start with the basic status registers that most inverters support
     {'name': 'main_status', 'register': 4000, 'words': 10},  # Basic input/output status
-    {'name': 'device_info', 'register': 4303, 'words': 24},  # Company, model, version
+    {'name': 'device_info', 'register': 4303, 'words': 24, 'once': True},  # Company, model, version
     # Note: The following registers only exist on bidirectional energy storage inverters
     # Simple inverters like RINVTPGH110111S will return error code 2 (Illegal Data Address)
     # {'name': 'settings', 'register': 4441, 'words': 4},    # Output priority, frequency, AC range, power saving
@@ -964,6 +1043,7 @@ def parse_inverter_settings(data: bytes, offset: int = 3) -> Dict[str, Any]:
 PARSERS = {
     DeviceType.CONTROLLER: {
         12: parse_controller_device_info,
+        20: parse_controller_versions,
         26: parse_controller_device_id,
         256: parse_controller_charging_info,
         289: parse_controller_faults,  # 0x0121: Fault and warning bits
@@ -973,9 +1053,10 @@ PARSERS = {
     DeviceType.BATTERY: {
         5000: parse_battery_cell_info,
         5017: parse_battery_temp_info,
+        5035: parse_battery_more_temps,
         5042: parse_battery_info,
         5100: parse_battery_alarm_info,
-        5122: parse_battery_device_info,
+        5110: parse_battery_device_info,
     },
     DeviceType.INVERTER: {
         4000: parse_inverter_main_status,

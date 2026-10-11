@@ -196,8 +196,13 @@ class RenogyMonitor:
                 rejection_stats
             )
         
+        # Merge over the last published values (static registers are only
+        # read once, and a failed block keeps its previous values)
+        published = self._published.setdefault(device_key, {})
+        published.update(validated_data)
+
         # Send discovery if first time
-        model = validated_data.get('model', config.device_type.title())
+        model = published.get('model', config.device_type.title())
         self.mqtt_handler.send_discovery(
             config.name,
             config.mac_address,
@@ -205,9 +210,7 @@ class RenogyMonitor:
             model
         )
         
-        # Publish validated state, merged over the last published values
-        published = self._published.setdefault(device_key, {})
-        published.update(validated_data)
+        # Publish validated state
         self.mqtt_handler.publish_state(
             config.name,
             config.mac_address,
