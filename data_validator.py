@@ -45,6 +45,11 @@ CONTROLLER_VALIDATION_LIMITS = {
 }
 
 
+# A reading rejected as a spike is accepted after this many consecutive
+# readings agree with it (within max_change of each other).
+CONFIRM_READINGS = 3
+
+
 class DataValidator:
     """
     Validates sensor data and detects invalid spikes.
@@ -64,6 +69,10 @@ class DataValidator:
         self._last_good_values: Dict[str, float] = {}
         self._rejection_log: List[Dict[str, Any]] = []
         self._max_rejection_log = 100  # Keep last 100 rejections
+        # Readings rejected only for changing too fast, per sensor: (value, count).
+        # A real step change (PV voltage at sunrise, a reset counter) would
+        # otherwise be rejected forever, because the last good value never moves.
+        self._pending: Dict[str, Tuple[float, int]] = {}
         
         # Select validation limits based on device type
         if device_type == 'controller':
@@ -113,6 +122,24 @@ class DataValidator:
                 if change > max_change:
                     rejection_reason = f"spike_detected (value={value}, last={last_value}, change={change:.2f}, max_change={max_change})"
             
+            if rejection_reason and rejection_reason.startswith("spike_detected"):
+                # Accept a new level once it has been read consistently
+                # CONFIRM_READINGS times in a row: a spike is a one-off.
+                pending = self._pending.get(key)
+                if pending and abs(value - pending[0]) <= max_change:
+                    pending = (value, pending[1] + 1)
+                else:
+                    pending = (value, 1)
+                if pending[1] >= CONFIRM_READINGS:
+                    logger.info(
+                        f"[{self.device_name}] {key}={value} confirmed by {pending[1]} consecutive "
+                        f"readings, accepting as the new level (was {self._last_good_values.get(key)})"
+                    )
+                    self._pending.pop(key, None)
+                    rejection_reason = None
+                else:
+                    self._pending[key] = pending
+
             if rejection_reason:
                 # Log the rejection
                 rejection = {
@@ -138,6 +165,7 @@ class DataValidator:
             else:
                 # Value is valid, update last known good
                 self._last_good_values[key] = value
+                self._pending.pop(key, None)
         
         return validated, rejections
     
