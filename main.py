@@ -51,6 +51,10 @@ class RenogyMonitor:
         self.mqtt_handler: Optional[MQTTHandler] = None
         self.device_manager: Optional[BLEDeviceManager] = None
         self.data_validator = DataValidatorManager()  # For spike detection
+        # Last published values per device. A register block that fails one
+        # poll keeps its previous values instead of turning every sensor of
+        # that block "unknown" in Home Assistant until the next poll.
+        self._published: Dict[str, Dict[str, Any]] = {}
         self._running = False
         self._shutdown_event: Optional[asyncio.Event] = None  # Created in run()
         
@@ -201,11 +205,13 @@ class RenogyMonitor:
             model
         )
         
-        # Publish validated state
+        # Publish validated state, merged over the last published values
+        published = self._published.setdefault(device_key, {})
+        published.update(validated_data)
         self.mqtt_handler.publish_state(
             config.name,
             config.mac_address,
-            validated_data
+            published
         )
         
         # Update availability
@@ -261,6 +267,17 @@ class RenogyMonitor:
                         logger.warning(f"{device_data.config.name}: Unavailable")
                 
                 logger.info(f"Poll complete: {available_count}/{len(all_devices)} devices online")
+
+                # Tell Home Assistant which devices are not answering, so their
+                # sensors show "unavailable" instead of old values (the data
+                # callback above only runs when a device did answer)
+                for device_data in all_devices.values():
+                    if not device_data.is_available:
+                        self.mqtt_handler.publish_availability(
+                            device_data.config.name,
+                            device_data.config.mac_address,
+                            False
+                        )
                 
                 # Wait for next poll interval or shutdown
                 try:
