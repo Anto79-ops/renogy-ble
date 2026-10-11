@@ -249,6 +249,8 @@ class PersistentBLEConnection:
         self._notification_event: Optional[asyncio.Event] = None  # Created lazily
         self._lock: Optional[asyncio.Lock] = None  # Created lazily
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        # (device_id, register) of 'once' register groups already read
+        self._static_read: set = set()
         
     @property
     def is_connected(self) -> bool:
@@ -493,6 +495,8 @@ class PersistentBLEConnection:
         all_data = {}
         
         for reg_info in registers:
+            if reg_info.get('once') and (config.device_id, reg_info['register']) in self._static_read:
+                continue  # static values: already published, kept by the monitor
             logger.debug(f"[{config.name}] Reading {reg_info['name']} (reg={reg_info['register']}, words={reg_info['words']})")
             
             response = await self.read_registers(
@@ -505,6 +509,8 @@ class PersistentBLEConnection:
                 if validate_modbus_response(response, config.device_id):
                     parsed = parse_response(device_type_enum, reg_info['register'], response)
                     all_data.update(parsed)
+                    if reg_info.get('once') and parsed:
+                        self._static_read.add((config.device_id, reg_info['register']))
                     logger.debug(f"[{config.name}] {reg_info['name']}: parsed {len(parsed)} fields")
                 else:
                     logger.warning(f"[{config.name}] Invalid response for {reg_info['name']}: {response.hex()}")

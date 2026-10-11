@@ -305,55 +305,67 @@ The sensors are configured with appropriate `state_class` for energy tracking:
 
 ## Sensor Reference
 
-### Charge Controller Sensors
+Sensors marked *diagnostic* appear under **Diagnostic** on the device page.
+Static values (model, versions, serial) are read once when the monitor starts.
 
-| Sensor | Unit | Description |
-|--------|------|-------------|
-| battery_percentage | % | Battery state of charge |
-| battery_voltage | V | Battery voltage |
-| battery_current | A | Battery current |
-| battery_temperature | °C | Battery temperature |
-| pv_voltage | V | Solar panel voltage |
-| pv_current | A | Solar panel current |
-| pv_power | W | Solar panel power |
-| load_voltage | V | Load voltage |
-| load_current | A | Load current |
-| load_power | W | Load power |
-| controller_temperature | °C | Controller temperature |
-| charging_status | - | Current charging mode |
-| power_generation_today | Wh | Daily generation |
-| power_generation_total | Wh | Lifetime generation |
+### Charge Controller (Rover) Sensors
+
+| Sensor | Unit | Register | Description |
+|--------|------|----------|-------------|
+| battery_percentage | % | 0x0100 | Battery state of charge (voltage based) |
+| battery_voltage / battery_current | V / A | 0x0101-0x0102 | Battery voltage and charge current |
+| controller_temperature / battery_temperature | °C | 0x0103 | Controller and battery temperature |
+| load_voltage / load_current / load_power | V / A / W | 0x0104-0x0106 | DC load output |
+| pv_voltage / pv_current / pv_power | V / A / W | 0x0107-0x0109 | Solar panel input |
+| battery_min_voltage_today / battery_max_voltage_today | V | 0x010B-0x010C | Today's battery voltage range |
+| max_charging_current_today / max_discharging_current_today | A | 0x010D-0x010E | Today's peak currents |
+| max_charging_power_today / max_discharging_power_today | W | 0x010F-0x0110 | Today's peak power |
+| charging_amp_hours_today / discharging_amp_hours_today | Ah | 0x0111-0x0112 | Today's Ah |
+| power_generation_today / power_consumption_today | Wh | 0x0113-0x0114 | Today's energy |
+| operating_days | d | 0x0115 | Total operating days |
+| over_discharge_count / full_charge_count | - | 0x0116-0x0117 | Lifetime counters (as reported by the controller) |
+| charging_amp_hours_total / discharging_amp_hours_total | Ah | 0x0118-0x011B | Lifetime Ah |
+| power_generation_total / power_consumption_total | Wh | 0x011C-0x011F | Lifetime energy |
+| load_status / charging_status | - | 0x0120 | Load on/off and charging mode |
+| fault_count / warning_count | - | 0x0121-0x0122 | Active faults and warnings (details as attributes) |
+| battery_type | - | 0xE004 | Configured battery type |
+| boost / float / equalizing / charge limit / over-voltage voltages | V | 0xE005-0xE009 | Charge settings (*diagnostic*) |
+| boost return / over-discharge recovery / under-voltage warning / over-discharge / discharge limit | V | 0xE00A-0xE00E | Discharge settings (*diagnostic*) |
+| firmware_version / hardware_version | - | 0x0014-0x0017 | *diagnostic* |
 
 ### Battery Sensors
 
-| Sensor | Unit | Description |
-|--------|------|-------------|
-| voltage | V | Battery voltage |
-| current | A | Battery current (+charge/-discharge) |
-| power | W | Battery power |
-| soc | % | State of charge |
-| remaining_capacity | Ah | Remaining capacity |
-| total_capacity | Ah | Total capacity |
-| cycle_count | cycles | Charge cycle count |
-| bms_temperature | °C | BMS board temperature |
-| cell_voltages | V | Individual cell voltages |
+| Sensor | Unit | Register | Description |
+|--------|------|----------|-------------|
+| cell_N_voltage | V | 5001-5016 | Cell voltages (one sensor per cell) |
+| temperature_N, battery_temperature | °C | 5018-5033 | Cell temperature sensors |
+| environment_temperature | °C | 5037 | Ambient temperature sensor |
+| heater_temperature | °C | 5040 | Heater temperature (heated models) |
+| current / voltage / power | A / V / W | 5042-5043 | Pack current (+charge/-discharge), voltage, power |
+| remaining_capacity / total_capacity / soc | Ah / Ah / % | 5044-5047 | Capacity and state of charge |
+| cycle_count | cycles | 5048 | Charge cycle count |
+| charge / discharge voltage limit | V | 5049-5050 | BMS limits (*diagnostic*) |
+| charge / discharge current limit | A | 5051-5052 | BMS limits (*diagnostic*) |
+| alarm_count / warning_count | - | 5100-5108 | Active alarms and warnings (details as attributes) |
+| heater, charge/discharge MOSFET, fully charged | on/off | 5106-5107 | Binary sensors |
+| charging / discharging allowed | on/off | 5109 | Binary sensors |
+| serial_number / firmware_version | - | 5110-5121, 5130-5131 | *diagnostic* |
 
 ### Inverter Sensors
 
-| Sensor | Unit | Description |
-|--------|------|-------------|
-| input_voltage | V | AC input voltage |
-| input_current | A | AC input current |
-| output_voltage | V | AC output voltage |
-| output_current | A | AC output current |
-| output_frequency | Hz | Output frequency |
-| battery_voltage | V | Battery voltage |
-| battery_soc | % | Battery state of charge |
-| pv_voltage | V | PV input voltage |
-| pv_power | W | PV input power |
-| load_percentage | % | Load capacity percentage |
-| temperature | °C | Inverter temperature |
-| machine_state | - | Operating state |
+The RINVTPGH110111S answers only registers 4000-4009 and 4303-4326; the
+energy-storage inverter registers (4327+, 4398+, 4441+, 4543+) return
+"illegal address".
+
+| Sensor | Unit | Register | Description |
+|--------|------|----------|-------------|
+| input_voltage / input_current / input_power / input_frequency | V / A / W / Hz | 4000-4001, 4009 | AC input (0 when there is none) |
+| output_voltage / output_current / output_power / output_frequency | V / A / W / Hz | 4002-4004 | AC output |
+| battery_voltage | V | 4005 | Battery voltage at the inverter |
+| temperature | °C | 4006 | Inverter temperature |
+| fault_count | - | 4007-4008 | Active faults (details as attributes) |
+| eco_mode / beeper | on/off | 4007-4008 | Binary sensors |
+| firmware_version | - | 4319-4326 | *diagnostic* |
 
 ## Troubleshooting
 
@@ -410,6 +422,27 @@ voltage slightly, or ignore battery alarms in your automations while SOC is 100%
 - Some older BT-1 modules may have compatibility issues
 
 ## Changelog
+
+### 1.2.0 (2026-10-11)
+- **37 new sensors** from registers the devices already provide (every register
+  was checked against the real devices):
+  - Rover: today's min/max battery voltage and peak currents, operating days,
+    over-discharge and full-charge counts, lifetime charge/discharge Ah and
+    lifetime consumption; the boost/float/equalizing and discharge voltage
+    settings, firmware and hardware version (diagnostic).
+  - Battery: cycle count, ambient and heater temperature, BMS charge/discharge
+    voltage and current limits, serial number and firmware (diagnostic), and
+    binary sensors for the charge/discharge MOSFETs, charging/discharging
+    allowed and fully charged.
+  - Inverter: firmware version (diagnostic).
+- Most of the Rover values were already in every reply but were not parsed.
+- Static registers (model, versions, serial) are read once instead of every poll.
+- Removed the "historical" read of register 60000 (0xEA60). It is not the
+  7-day history and returned settings.
+- Sensor reference in the README rewritten with register numbers. The inverter
+  section listed sensors this model does not have.
+- Parser tests using register dumps from real devices.
+
 
 ### 1.1.0 (2026-10-11)
 - **Fix: garbage readings from late replies.** A reply that arrived after its
