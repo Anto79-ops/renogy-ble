@@ -20,7 +20,7 @@ CONTROLLER_VALIDATION_LIMITS = {
     # Battery sensors
     "battery_voltage": (0, 20, 5),  # 0-20V, max change 5V
     "battery_current": (-100, 100, 50),  # -100 to 100A, max change 50A
-    "battery_percentage": (0, 100, 50),  # 0-100%, max change 50%
+    "battery_percentage": (0, 100, 100),  # 0-100%, max change 100%
     "battery_temperature": (-40, 85, 20),  # -40 to 85°C, max change 20°C
     "charging_amp_hours_today": (0, 10000, 200),  # 0-10000Ah, max change 200
     "discharging_amp_hours_today": (0, 10000, 200),  # 0-10000Ah, max change 200
