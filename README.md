@@ -276,6 +276,26 @@ mqtt:
       device_class: voltage
 ```
 
+### Availability
+
+Every entity is marked **unavailable** in Home Assistant when either:
+- the monitor itself stops (Pi off, service crashed): the broker publishes the
+  `renogy/bridge/availability` last-will message, or
+- a device stops answering for 3 polls in a row: `renogy/<device>/availability`
+  goes `offline`.
+
+So a dead link shows up as unavailable instead of frozen values. If you have
+automations that trigger on a fault or alarm count changing *from* `0`, add
+`not_to: [unknown, unavailable]` to those triggers, otherwise going unavailable
+looks like a new fault:
+
+```yaml
+- trigger: state
+  entity_id: sensor.renogy_battery_active_alarms
+  from: "0"
+  not_to: [unknown, unavailable]
+```
+
 ### Energy Dashboard
 
 The sensors are configured with appropriate `state_class` for energy tracking:
@@ -375,11 +395,44 @@ sudo usermod -a -G bluetooth $USER
 sudo python main.py config.yaml
 ```
 
+### Battery Cell Alarms When Fully Charged
+
+On a sunny day you may see `cell_N_alarm` on every cell from the time the
+battery reaches 100% until it starts discharging. The BMS raises this while the
+cells sit at about 3.5–3.6 V (pack 14.0–14.5 V), so it reflects the charge
+voltage, not a fault. If it bothers you, lower the controller's boost/float
+voltage slightly, or ignore battery alarms in your automations while SOC is 100%.
+
 ## Known Limitations
 
 - Only one BLE client can connect to a device at a time (close Renogy app first)
 - Raspberry Pi built-in Bluetooth may have limited range
 - Some older BT-1 modules may have compatibility issues
+
+## Changelog
+
+### 1.1.0 (2026-10-11)
+- **Fix: garbage readings from late replies.** A reply that arrived after its
+  request timed out was parsed as the next register block (for example
+  `max_charging_power_today` = 70 published as 17,920 Wh generated today). Replies
+  are now matched to the request (slave address, function, byte count, CRC) and
+  stray bytes are discarded. This also protects hub mode, where battery and
+  inverter share one BT-2.
+- **Fix: the data validator could lock up.** A genuine step change larger than
+  `max_change` (PV voltage at sunrise) was rejected forever. A new level is now
+  accepted after 3 consistent readings in a row.
+- **Fix: sensors flashing "unknown".** When one register block failed, all of its
+  sensors went unknown until the next poll. The last values are kept instead.
+- **New: availability.** Entities go unavailable when the monitor stops (MQTT
+  last will) or a device stops answering, instead of showing stale values.
+- Faster polling: waits for the complete reply instead of a fixed delay.
+- paho-mqtt 2.x callback API (removes the deprecation warning); unused
+  `asyncio-mqtt` dependency removed.
+- Brings the repository in line with the version running in production
+  (Bluetooth adapter reset on startup, battery charge/discharge enable bits fixed).
+
+### 1.0.0 (2025-12-26)
+- Initial release.
 
 ## Credits
 
