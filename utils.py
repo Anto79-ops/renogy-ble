@@ -185,6 +185,46 @@ def validate_modbus_response(data: bytes, expected_device_id: int = None) -> boo
     return True
 
 
+def find_modbus_frame(buffer: bytes, device_id: int, word_count: int,
+                      function_code: int = 0x03) -> Optional[bytes]:
+    """
+    Find the reply to one specific read request inside a notification buffer.
+
+    A reply that arrives late (after its own request timed out) lands in the
+    buffer of the NEXT request, in front of the real reply. Taking the buffer
+    as-is then parses one frame's bytes as another's registers and publishes
+    garbage (seen in practice: max_charging_power_today 70 read as 17920 Wh
+    generated). So only a frame that matches the request is accepted:
+    slave address (any address when the request used 255), function code,
+    byte count == 2 * word_count, and a valid CRC. A Modbus exception reply
+    (function | 0x80) for this request is returned as-is so the caller can
+    log it.
+
+    Returns:
+        The matching frame, or None if the buffer does not contain one (yet)
+    """
+    want_len = 5 + 2 * word_count
+    for i in range(len(buffer)):
+        if device_id != 255 and buffer[i] != device_id:
+            continue
+        if i + 5 > len(buffer):
+            break
+        func = buffer[i + 1]
+        if func == (function_code | 0x80):
+            frame = bytes(buffer[i:i + 5])
+            if modbus_crc16(frame[:3]) == (frame[3], frame[4]):
+                return frame
+            continue
+        if func != function_code or buffer[i + 2] != 2 * word_count:
+            continue
+        if i + want_len > len(buffer):
+            continue  # matching header, rest not here yet
+        frame = bytes(buffer[i:i + want_len])
+        if modbus_crc16(frame[:-2]) == (frame[-2], frame[-1]):
+            return frame
+    return None
+
+
 def format_mac_address(mac: str) -> str:
     """
     Normalize MAC address format to XX:XX:XX:XX:XX:XX.
