@@ -77,8 +77,8 @@ CONTROLLER_SENSORS = [
     {'key': 'full_charge_count', 'name': 'Full Charge Count', 'device_class': None, 'unit': None, 'state_class': 'total_increasing', 'icon': 'mdi:battery-check'},
 
     # Charge settings (0xE005-0xE00E) and versions - diagnostic
-    {'key': 'boost_voltage', 'name': 'Boost Charge Voltage', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
-    {'key': 'float_voltage', 'name': 'Float Charge Voltage', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'boost_voltage', 'name': 'Boost / Overcharge Voltage', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'float_voltage', 'name': 'Float / Overcharge Recovery Voltage', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
     {'key': 'equalizing_voltage', 'name': 'Equalizing Voltage', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
     {'key': 'charge_limit_voltage', 'name': 'Charge Limit Voltage', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
     {'key': 'overvoltage_threshold', 'name': 'Over-Voltage Threshold', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
@@ -87,6 +87,8 @@ CONTROLLER_SENSORS = [
     {'key': 'undervoltage_warning_voltage', 'name': 'Under-Voltage Warning Voltage', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
     {'key': 'over_discharge_voltage', 'name': 'Over-Discharge Voltage', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
     {'key': 'discharge_limit_voltage', 'name': 'Discharge Limit Voltage', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'nominal_battery_capacity', 'name': 'Nominal Battery Capacity', 'device_class': None, 'unit': 'Ah', 'icon': 'mdi:battery-high', 'entity_category': 'diagnostic'},
+    {'key': 'system_voltage', 'name': 'System Voltage', 'device_class': None, 'unit': None, 'icon': 'mdi:flash', 'entity_category': 'diagnostic'},
     {'key': 'firmware_version', 'name': 'Firmware Version', 'device_class': None, 'unit': None, 'icon': 'mdi:chip', 'entity_category': 'diagnostic'},
     {'key': 'hardware_version', 'name': 'Hardware Version', 'device_class': None, 'unit': None, 'icon': 'mdi:chip', 'entity_category': 'diagnostic'},
     
@@ -110,6 +112,14 @@ BATTERY_SENSORS = [
     {'key': 'discharge_voltage_limit', 'name': 'Discharge Voltage Limit', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
     {'key': 'charge_current_limit', 'name': 'Charge Current Limit', 'device_class': 'current', 'unit': 'A', 'entity_category': 'diagnostic'},
     {'key': 'discharge_current_limit', 'name': 'Discharge Current Limit', 'device_class': 'current', 'unit': 'A', 'entity_category': 'diagnostic'},
+    {'key': 'cell_over_voltage_limit', 'name': 'Cell Over-Voltage Protection', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'cell_high_voltage_limit', 'name': 'Cell High-Voltage Warning', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'cell_low_voltage_limit', 'name': 'Cell Low-Voltage Warning', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'cell_under_voltage_limit', 'name': 'Cell Under-Voltage Protection', 'device_class': 'voltage', 'unit': 'V', 'entity_category': 'diagnostic'},
+    {'key': 'charge_high_temperature_limit', 'name': 'Charge High-Temperature Warning', 'device_class': 'temperature', 'unit': '°C', 'entity_category': 'diagnostic'},
+    {'key': 'charge_low_temperature_limit', 'name': 'Charge Low-Temperature Warning', 'device_class': 'temperature', 'unit': '°C', 'entity_category': 'diagnostic'},
+    {'key': 'discharge_high_temperature_limit', 'name': 'Discharge High-Temperature Warning', 'device_class': 'temperature', 'unit': '°C', 'entity_category': 'diagnostic'},
+    {'key': 'discharge_low_temperature_limit', 'name': 'Discharge Low-Temperature Warning', 'device_class': 'temperature', 'unit': '°C', 'entity_category': 'diagnostic'},
     {'key': 'serial_number', 'name': 'Serial Number', 'device_class': None, 'unit': None, 'icon': 'mdi:identifier', 'entity_category': 'diagnostic'},
     {'key': 'firmware_version', 'name': 'Firmware Version', 'device_class': None, 'unit': None, 'icon': 'mdi:chip', 'entity_category': 'diagnostic'},
     
@@ -162,6 +172,7 @@ INVERTER_SENSORS = [
     # {'key': 'battery_soc', 'name': 'Battery SOC', 'device_class': 'battery', 'unit': '%', 'state_class': 'measurement'},
     
     # Temperature and status
+    {'key': 'inverter_mode', 'name': 'Inverter Mode', 'device_class': None, 'unit': None, 'icon': 'mdi:power-settings'},
     {'key': 'temperature', 'name': 'Temperature', 'device_class': 'temperature', 'unit': '°C', 'state_class': 'measurement'},
     # Note: machine_state requires register 4398+ which may not exist on basic inverters
     # {'key': 'machine_state', 'name': 'Machine State', 'device_class': None, 'unit': None, 'icon': 'mdi:state-machine'},
@@ -327,7 +338,7 @@ class MQTTHandler:
             "name": device_name,
             "manufacturer": "Renogy",
             "model": model or device_type.title(),
-            "sw_version": "1.2.0",
+            "sw_version": "1.3.0",
         }
         
         # Get sensor definitions for this device type
