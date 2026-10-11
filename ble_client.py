@@ -14,7 +14,7 @@ from datetime import datetime
 from bleak import BleakClient, BleakScanner
 from bleak.exc import BleakError
 
-from utils import create_modbus_read_request, validate_modbus_response
+from utils import create_modbus_read_request, validate_modbus_response, find_modbus_frame
 from parsers import DeviceType, parse_response, get_registers_for_device
 
 logger = logging.getLogger(__name__)
@@ -433,24 +433,43 @@ class PersistentBLEConnection:
                 self._connected = False
                 return None
             
-            # Wait for response
-            try:
-                await asyncio.wait_for(self._notification_event.wait(), timeout=NOTIFICATION_TIMEOUT)
-                logger.debug(f"[{self.mac_address}] Notification received")
-            except asyncio.TimeoutError:
-                logger.warning(f"[{self.mac_address}] Timeout waiting for response (reg={register}, dev_id={device_id})")
+            # Wait until the reply to THIS request is in the buffer. Bytes that
+            # do not belong to it (a late reply to an earlier request) are
+            # skipped rather than parsed as this register block.
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + NOTIFICATION_TIMEOUT
+            frame = None
+            while True:
+                frame = find_modbus_frame(self._notification_data, device_id, word_count)
+                if frame is not None:
+                    break
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    break
+                self._notification_event.clear()
+                try:
+                    await asyncio.wait_for(self._notification_event.wait(), timeout=remaining)
+                except asyncio.TimeoutError:
+                    break
+
+            buffered = bytes(self._notification_data)
+            if frame is None:
+                if buffered:
+                    logger.warning(
+                        f"[{self.mac_address}] No matching reply (reg={register}, dev_id={device_id}); "
+                        f"discarded {len(buffered)} unrelated byte(s): {buffered.hex()}"
+                    )
+                else:
+                    logger.warning(f"[{self.mac_address}] Timeout waiting for response (reg={register}, dev_id={device_id})")
                 return None
-            
-            # Wait a bit for all data to arrive
-            await asyncio.sleep(0.3)
-            
-            response = bytes(self._notification_data)
-            if response:
-                logger.debug(f"[{self.mac_address}] Response ({len(response)} bytes): {response.hex()}")
-            else:
-                logger.debug(f"[{self.mac_address}] Response: empty")
-            
-            return response if len(response) >= 5 else None
+
+            if len(buffered) != len(frame):
+                logger.info(
+                    f"[{self.mac_address}] Skipped {len(buffered) - len(frame)} stray byte(s) "
+                    f"around the reply to reg={register}: {buffered.hex()}"
+                )
+            logger.debug(f"[{self.mac_address}] Response ({len(frame)} bytes): {frame.hex()}")
+            return frame
     
     async def poll_device(self, config: DeviceConfig) -> Dict[str, Any]:
         """
