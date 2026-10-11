@@ -27,7 +27,7 @@ from pathlib import Path
 
 import yaml
 
-from ble_client import BLEDeviceManager, DeviceConfig, scan_for_devices, set_bt_adapter, get_bt_adapter
+from ble_client import BLEDeviceManager, DeviceConfig, scan_for_devices, set_bt_adapter, get_bt_adapter, reset_bluetooth_adapter, restart_bluetooth_service
 from mqtt_handler import MQTTHandler, MQTTConfig
 from data_validator import DataValidatorManager
 
@@ -226,6 +226,15 @@ class RenogyMonitor:
         logger.info(f"Starting Renogy Monitor (poll interval: {poll_interval}s)")
         
         try:
+            # Reset Bluetooth adapter before connecting
+            # This helps when the service restarts and adapter is in a bad state
+            adapter = get_bt_adapter()
+            logger.info(f"Initializing Bluetooth adapter {adapter}...")
+            if not reset_bluetooth_adapter(adapter):
+                logger.warning(f"Bluetooth adapter reset failed, trying service restart...")
+                restart_bluetooth_service()
+                await asyncio.sleep(3)  # Give service time to stabilize
+            
             # Connect to all BT modules on startup
             logger.info("Establishing persistent connections to all BT modules...")
             connected = await self.device_manager.connect_all()

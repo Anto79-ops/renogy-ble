@@ -5,6 +5,8 @@ Uses persistent connections for reliability.
 
 import asyncio
 import logging
+import subprocess
+import time
 from typing import Dict, List, Optional, Callable, Any
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -29,6 +31,154 @@ RECONNECT_DELAY = 10.0
 
 # Default Bluetooth adapter
 DEFAULT_BT_ADAPTER = "hci0"
+
+
+def reset_bluetooth_adapter(adapter: str = None) -> bool:
+    """
+    Reset the Bluetooth adapter to ensure it's in a clean state.
+    This helps with connection issues after service restarts.
+    
+    Args:
+        adapter: The adapter name (e.g., 'hci0', 'hci1'). If None, uses configured adapter.
+    
+    Returns:
+        True if reset was successful, False otherwise.
+    """
+    if adapter is None:
+        adapter = get_bt_adapter()
+    
+    logger.info(f"Resetting Bluetooth adapter {adapter}...")
+    
+    try:
+        # First, check if adapter exists
+        result = subprocess.run(
+            ['hciconfig', adapter],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.returncode != 0:
+            logger.error(f"Adapter {adapter} not found: {result.stderr}")
+            # Try to find available adapters
+            list_result = subprocess.run(['hciconfig', '-a'], capture_output=True, text=True, timeout=10)
+            logger.info(f"Available adapters:\n{list_result.stdout}")
+            return False
+        
+        # Bring adapter down
+        logger.debug(f"Bringing {adapter} down...")
+        subprocess.run(
+            ['sudo', 'hciconfig', adapter, 'down'],
+            capture_output=True,
+            timeout=10
+        )
+        time.sleep(2)
+        
+        # Bring adapter back up
+        logger.debug(f"Bringing {adapter} up...")
+        subprocess.run(
+            ['sudo', 'hciconfig', adapter, 'up'],
+            capture_output=True,
+            timeout=10
+        )
+        time.sleep(3)
+        
+        # Verify adapter is up, retry if needed
+        for attempt in range(5):
+            result = subprocess.run(
+                ['hciconfig', adapter],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if 'UP RUNNING' in result.stdout:
+                logger.info(f"Bluetooth adapter {adapter} reset successfully")
+                return True
+            
+            logger.debug(f"Adapter not ready (attempt {attempt + 1}/5), waiting...")
+            
+            # Try bringing it up again
+            subprocess.run(
+                ['sudo', 'hciconfig', adapter, 'up'],
+                capture_output=True,
+                timeout=10
+            )
+            time.sleep(2)
+        
+        # Final check
+        result = subprocess.run(
+            ['hciconfig', adapter],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if 'UP RUNNING' in result.stdout:
+            logger.info(f"Bluetooth adapter {adapter} is up")
+            return True
+        else:
+            logger.error(f"Adapter {adapter} failed to come up: {result.stdout}")
+            return False
+            
+    except subprocess.TimeoutExpired:
+        logger.error(f"Timeout while resetting {adapter}")
+        return False
+    except FileNotFoundError:
+        logger.warning("hciconfig not found, trying bluetoothctl...")
+        try:
+            # Alternative: use bluetoothctl
+            subprocess.run(['sudo', 'bluetoothctl', 'power', 'off'], capture_output=True, timeout=5)
+            time.sleep(1)
+            subprocess.run(['sudo', 'bluetoothctl', 'power', 'on'], capture_output=True, timeout=5)
+            time.sleep(2)
+            logger.info("Bluetooth reset via bluetoothctl")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to reset Bluetooth: {e}")
+            return False
+    except Exception as e:
+        logger.error(f"Error resetting Bluetooth adapter: {e}")
+        return False
+
+
+def restart_bluetooth_service() -> bool:
+    """
+    Restart the Bluetooth service completely.
+    Use this as a last resort if adapter reset doesn't work.
+    
+    Returns:
+        True if restart was successful, False otherwise.
+    """
+    logger.info("Restarting Bluetooth service...")
+    
+    try:
+        # Stop bluetooth service
+        subprocess.run(
+            ['sudo', 'systemctl', 'restart', 'bluetooth'],
+            capture_output=True,
+            timeout=30
+        )
+        time.sleep(3)
+        
+        # Check if service is running
+        result = subprocess.run(
+            ['systemctl', 'is-active', 'bluetooth'],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.stdout.strip() == 'active':
+            logger.info("Bluetooth service restarted successfully")
+            return True
+        else:
+            logger.warning(f"Bluetooth service status: {result.stdout.strip()}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error restarting Bluetooth service: {e}")
+        return False
 
 
 def get_bt_adapter() -> str:

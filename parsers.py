@@ -410,6 +410,10 @@ def parse_battery_alarm_info(data: bytes, offset: int = 3) -> Dict[str, Any]:
         result['warning_count'] = 0
         return result
     
+    # Log raw data for debugging
+    raw_hex = data[offset:offset+20].hex()
+    logger.debug(f"Battery status raw data (registers 5100-5109): {raw_hex}")
+    
     # Registers 5100-5101 (4 bytes) - Cell Voltage Alarm Info
     # Each cell uses 2 bits: Bit[2n+1:2n] for cell n+1
     cell_voltage_alarm = bytes_to_int(data, offset, 4)
@@ -456,6 +460,7 @@ def parse_battery_alarm_info(data: bytes, offset: int = 3) -> Dict[str, Any]:
     
     # Register 5106 (2 bytes) - Status1
     status1 = bytes_to_int(data, offset + 12, 2)
+    logger.debug(f"Register 5106 (Status1): 0x{status1:04X} binary={status1:016b}")
     if status1 & (1 << 15):
         result['protection_alarms'].append('module_undervoltage')
     if status1 & (1 << 14):
@@ -492,6 +497,7 @@ def parse_battery_alarm_info(data: bytes, offset: int = 3) -> Dict[str, Any]:
     
     # Register 5107 (2 bytes) - Status2
     status2 = bytes_to_int(data, offset + 14, 2)
+    logger.debug(f"Register 5107 (Status2): 0x{status2:04X} binary={status2:016b}")
     # Bit 15: Effective charge current
     result['effective_charge'] = bool(status2 & (1 << 15))
     # Bit 14: Effective discharge current
@@ -508,6 +514,7 @@ def parse_battery_alarm_info(data: bytes, offset: int = 3) -> Dict[str, Any]:
     
     # Register 5108 (2 bytes) - Status3 (Warnings)
     status3 = bytes_to_int(data, offset + 16, 2)
+    logger.debug(f"Register 5108 (Status3-Warnings): 0x{status3:04X} binary={status3:016b}")
     if status3 & (1 << 7):
         result['warnings'].append('discharge_high_temp')
     if status3 & (1 << 6):
@@ -531,10 +538,11 @@ def parse_battery_alarm_info(data: bytes, offset: int = 3) -> Dict[str, Any]:
     
     # Register 5109 (2 bytes) - Charge/Discharge Status
     status4 = bytes_to_int(data, offset + 18, 2)
-    # Bit 7: Discharge enable
-    result['discharge_enabled'] = bool(status4 & (1 << 7))
-    # Bit 6: Charge enable
-    result['charge_enabled'] = bool(status4 & (1 << 6))
+    logger.debug(f"Register 5109 (Status4-Charge/Discharge): 0x{status4:04X} binary={status4:016b}")
+    # Bit 7: Charge enable (1=Yes, 0=Stop request) - NOTE: Protocol says Bit7=Charge, Bit6=Discharge
+    result['charge_enabled'] = bool(status4 & (1 << 7))
+    # Bit 6: Discharge enable (1=Yes, 0=Stop request)
+    result['discharge_enabled'] = bool(status4 & (1 << 6))
     # Bit 5: Charge immediately
     result['charge_immediately'] = bool(status4 & (1 << 5))
     # Bit 4: Charge immediately (duplicate?)
@@ -547,7 +555,66 @@ def parse_battery_alarm_info(data: bytes, offset: int = 3) -> Dict[str, Any]:
     result['alarm_count'] = len(all_alarms)
     result['warning_count'] = len(result['warnings'])
     
+    # Debug logging for alarm/warning status
+    logger.debug(f"Battery alarm parsing - Raw data length: {len(data)}, offset: {offset}")
+    logger.debug(f"Battery alarms: {result['alarms']} (count: {result['alarm_count']})")
+    logger.debug(f"Battery warnings: {result['warnings']} (count: {result['warning_count']})")
+    logger.debug(f"Heater: {result.get('heater_on')}, Charge MOSFET: {result.get('charge_mosfet')}, Discharge MOSFET: {result.get('discharge_mosfet')}")
+    
     return result
+
+
+def add_software_temperature_warnings(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Add software-calculated temperature warnings based on typical LiFePO4 safe limits.
+    
+    Some BMS units don't report temperature warnings via status registers even when
+    temperatures are outside safe operating ranges. This function adds warnings
+    based on typical LiFePO4 specifications:
+    
+    - Charge: 0°C to 45°C (32°F to 113°F)
+    - Discharge: -20°C to 60°C (-4°F to 140°F)
+    
+    These are added as 'soft_' prefixed warnings to distinguish from BMS-reported warnings.
+    """
+    if 'warnings' not in data:
+        data['warnings'] = []
+    if 'soft_warnings' not in data:
+        data['soft_warnings'] = []
+    
+    temp = data.get('battery_temperature')
+    if temp is None:
+        return data
+    
+    # LiFePO4 typical safe temperature limits
+    CHARGE_LOW_TEMP = 0.0      # Don't charge below 0°C
+    CHARGE_HIGH_TEMP = 45.0    # Don't charge above 45°C
+    DISCHARGE_LOW_TEMP = -20.0 # Don't discharge below -20°C
+    DISCHARGE_HIGH_TEMP = 60.0 # Don't discharge above 60°C
+    
+    # Add soft warnings based on temperature
+    if temp < CHARGE_LOW_TEMP:
+        data['soft_warnings'].append('charge_low_temp')
+        logger.info(f"Software warning: Battery temp {temp}°C below charge limit ({CHARGE_LOW_TEMP}°C)")
+    if temp > CHARGE_HIGH_TEMP:
+        data['soft_warnings'].append('charge_high_temp')
+        logger.info(f"Software warning: Battery temp {temp}°C above charge limit ({CHARGE_HIGH_TEMP}°C)")
+    if temp < DISCHARGE_LOW_TEMP:
+        data['soft_warnings'].append('discharge_low_temp')
+        logger.info(f"Software warning: Battery temp {temp}°C below discharge limit ({DISCHARGE_LOW_TEMP}°C)")
+    if temp > DISCHARGE_HIGH_TEMP:
+        data['soft_warnings'].append('discharge_high_temp')
+        logger.info(f"Software warning: Battery temp {temp}°C above discharge limit ({DISCHARGE_HIGH_TEMP}°C)")
+    
+    # Combine with existing warnings (avoid duplicates)
+    for warn in data['soft_warnings']:
+        if warn not in data['warnings']:
+            data['warnings'].append(warn)
+    
+    # Update warning count
+    data['warning_count'] = len(data['warnings'])
+    
+    return data
 
 
 def parse_battery_device_info(data: bytes, offset: int = 3) -> Dict[str, Any]:
