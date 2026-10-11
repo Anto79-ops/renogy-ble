@@ -328,8 +328,9 @@ Static values (model, versions, serial) are read once when the monitor starts.
 | power_generation_total / power_consumption_total | Wh | 0x011C-0x011F | Lifetime energy |
 | load_status / charging_status | - | 0x0120 | Load on/off and charging mode |
 | fault_count / warning_count | - | 0x0121-0x0122 | Active faults and warnings (details as attributes) |
+| nominal_battery_capacity / system_voltage | Ah / V | 0xE002-0xE003 | Configured capacity and system voltage (*diagnostic*) |
 | battery_type | - | 0xE004 | Configured battery type |
-| boost / float / equalizing / charge limit / over-voltage voltages | V | 0xE005-0xE009 | Charge settings (*diagnostic*) |
+| over-voltage / charge limit / equalizing / boost (lithium: overcharge) / float (lithium: overcharge recovery) voltages | V | 0xE005-0xE009 | Charge settings (*diagnostic*) |
 | boost return / over-discharge recovery / under-voltage warning / over-discharge / discharge limit | V | 0xE00A-0xE00E | Discharge settings (*diagnostic*) |
 | firmware_version / hardware_version | - | 0x0014-0x0017 | *diagnostic* |
 
@@ -349,7 +350,8 @@ Static values (model, versions, serial) are read once when the monitor starts.
 | alarm_count / warning_count | - | 5100-5108 | Active alarms and warnings (details as attributes) |
 | heater, charge/discharge MOSFET, fully charged | on/off | 5106-5107 | Binary sensors |
 | charging / discharging allowed | on/off | 5109 | Binary sensors |
-| serial_number / firmware_version | - | 5110-5121, 5130-5131 | *diagnostic* |
+| serial_number / firmware_version | - | 5110-5117, 5130-5131 | *diagnostic* |
+| cell over/high/low/under voltage, charge and discharge high/low temperature | V / °C | 5200-5221 | BMS warning ("high/low") and protection ("over/under") thresholds (*diagnostic*); all 22 thresholds are in the state JSON |
 
 ### Inverter Sensors
 
@@ -363,9 +365,13 @@ energy-storage inverter registers (4327+, 4398+, 4441+, 4543+) return
 | output_voltage / output_current / output_power / output_frequency | V / A / W / Hz | 4002-4004 | AC output |
 | battery_voltage | V | 4005 | Battery voltage at the inverter |
 | temperature | °C | 4006 | Inverter temperature |
+| inverter_mode | - | 4102 | normal / eco (sleep) / shutdown |
 | fault_count | - | 4007-4008 | Active faults (details as attributes) |
 | eco_mode / beeper | on/off | 4007-4008 | Binary sensors |
 | firmware_version | - | 4319-4326 | *diagnostic* |
+
+Register maps: [Renogy Modbus documents collected in cyrils/renogy-bt discussion #94](https://github.com/cyrils/renogy-bt/discussions/94)
+(Rover Modbus, Lithium Iron Battery BMS Modbus Protocol V1.7, Inverter Modbus Protocol V1.8).
 
 ## Troubleshooting
 
@@ -410,9 +416,11 @@ sudo python main.py config.yaml
 ### Battery Cell Alarms When Fully Charged
 
 On a sunny day you may see `cell_N_alarm` on every cell from the time the
-battery reaches 100% until it starts discharging. The BMS raises this while the
-cells sit at about 3.5–3.6 V (pack 14.0–14.5 V), so it reflects the charge
-voltage, not a fault. If it bothers you, lower the controller's boost/float
+battery reaches 100% until it starts discharging. The BMS raises it when a cell
+passes its *Cell High-Voltage Warning* threshold (3.5 V on the RBT100LFP12SH-G1,
+register 5201) and the Rover holds the battery at its boost voltage (for example
+14.4 V = 3.6 V per cell). It reflects the charge voltage, not a fault: the
+protection trip (*Cell Over-Voltage Protection*, 3.7 V) is not reached. If it bothers you, lower the controller's boost/float
 voltage slightly, or ignore battery alarms in your automations while SOC is 100%.
 
 ## Known Limitations
@@ -422,6 +430,22 @@ voltage slightly, or ignore battery alarms in your automations while SOC is 100%
 - Some older BT-1 modules may have compatibility issues
 
 ## Changelog
+
+### 1.3.0 (2026-10-11)
+Checked against the Renogy Modbus documents (BMS protocol V1.7, Rover Modbus,
+inverter protocol V1.8):
+- **Fix: battery warnings were read from the wrong register.** The BMS reports
+  warnings (cell/module high and low voltage, charge/discharge temperature) in
+  5107 bits 0-7; they were read from 5108, which holds per-cell voltage errors.
+  The battery's *Active Warnings* sensor could never show a real warning, and a
+  cell error was reported as the wrong warning.
+- **Fix: battery "other alarms" (5104-5105)** were decoded from the wrong bit
+  positions (BMS board, ambient and heater temperature, charge/discharge current).
+- Battery serial number is 16 characters (5110-5117); the rest are version codes.
+- New: battery warning and protection thresholds (5200-5221), Rover nominal
+  battery capacity and system voltage (0xE002-0xE003), inverter mode (4102).
+- Rover boost/float voltage sensors renamed for lithium mode, where these
+  registers are the overcharge and overcharge-recovery voltages.
 
 ### 1.2.0 (2026-10-11)
 - **37 new sensors** from registers the devices already provide (every register
