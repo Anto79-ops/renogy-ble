@@ -1,32 +1,28 @@
 [Unit]
 Description=Renogy BT Monitor - Solar Device Monitoring via Bluetooth
-Documentation=https://github.com/your-repo/renogy_monitor
-After=network.target bluetooth.target
-Wants=bluetooth.target
+Documentation=https://github.com/Anto79-ops/renogy-ble
+After=network-online.target bluetooth.target
+Wants=network-online.target bluetooth.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
+# Change User and the paths below to your own user. On startup the monitor
+# resets the Bluetooth adapter with "sudo hciconfig", so this user needs
+# passwordless sudo (the default for the first user on Raspberry Pi OS).
 User=pi
-Group=pi
 WorkingDirectory=/home/pi/renogy_monitor
-Environment="PATH=/home/pi/renogy_monitor/venv/bin:/usr/bin"
+# Give the Bluetooth service time to fully start
+ExecStartPre=/bin/sleep 5
 ExecStart=/home/pi/renogy_monitor/venv/bin/python main.py config.yaml
 Restart=always
-RestartSec=30
-StartLimitIntervalSec=300
-StartLimitBurst=5
+RestartSec=10
 
 # Logging
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=renogy-monitor
-
-# Security hardening
-NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=/home/pi/renogy_monitor
-PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
