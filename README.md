@@ -431,6 +431,12 @@ voltage slightly, or ignore battery alarms in your automations while SOC is 100%
 
 ## Changelog
 
+### 1.3.1 (2026-10-11)
+- Fix: stopping the service during a poll hung for about 90 seconds until
+  systemd killed it (the poll kept reconnecting after shutdown had closed the
+  Bluetooth connections). The poll loop is now cancelled first, then the
+  monitor disconnects and marks itself offline.
+
 ### 1.3.0 (2026-10-11)
 Checked against the Renogy Modbus documents (BMS protocol V1.7, Rover Modbus,
 inverter protocol V1.8):

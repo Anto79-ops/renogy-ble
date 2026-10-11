@@ -347,9 +347,15 @@ class RenogyMonitor:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
+        main_task = loop.create_task(self.run())
+
         def signal_handler():
+            # Cancel the poll loop first: shutting down while a poll is in
+            # progress made the poll reconnect (up to ~90 s per module) and
+            # systemd killed the process with SIGKILL
             logger.info("Received shutdown signal")
-            loop.create_task(self.shutdown())
+            self._running = False
+            main_task.cancel()
         
         for sig in (signal.SIGINT, signal.SIGTERM):
             try:
@@ -358,13 +364,13 @@ class RenogyMonitor:
                 # Signal handlers not supported on Windows
                 pass
         
-        # Run the main loop
+        # Run the main loop, then shut down cleanly
         try:
-            loop.run_until_complete(self.run())
-        except KeyboardInterrupt:
-            logger.info("Interrupted by user")
-            loop.run_until_complete(self.shutdown())
+            loop.run_until_complete(main_task)
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            logger.info("Interrupted")
         finally:
+            loop.run_until_complete(self.shutdown())
             loop.close()
         
         return 0
