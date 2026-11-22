@@ -139,7 +139,7 @@ class RenogyMonitor:
         bt_config = self.config.get('bluetooth', {})
         adapter = bt_config.get('adapter', 'hci0')
         set_bt_adapter(adapter)
-        logger.info(f"Using Bluetooth adapter: {adapter}")
+        logger.info(f"Using Bluetooth adapter: {get_bt_adapter()}")
         
         device_configs = []
         
@@ -152,6 +152,7 @@ class RenogyMonitor:
                     device_type=dev['type'],
                     device_id=dev.get('device_id', 255),
                     adapter=dev.get('adapter', 'bt2'),
+                    bt_adapter=dev.get('bluetooth_adapter'),
                 )
                 device_configs.append(config)
                 logger.info(f"Configured device: {config.name} ({config.device_type})")
@@ -165,7 +166,9 @@ class RenogyMonitor:
         
         self.device_manager = BLEDeviceManager(
             device_configs,
-            on_data_callback=self._on_device_data
+            on_data_callback=self._on_device_data,
+            auto_reset=bt_config.get('auto_reset', True),
+            reset_after=bt_config.get('reset_after_failed_polls', 3),
         )
         
         return True
@@ -235,14 +238,16 @@ class RenogyMonitor:
         logger.info(f"Starting Renogy Monitor (poll interval: {poll_interval}s)")
         
         try:
-            # Reset Bluetooth adapter before connecting
-            # This helps when the service restarts and adapter is in a bad state
-            adapter = get_bt_adapter()
-            logger.info(f"Initializing Bluetooth adapter {adapter}...")
-            if not reset_bluetooth_adapter(adapter):
-                logger.warning(f"Bluetooth adapter reset failed, trying service restart...")
-                restart_bluetooth_service()
-                await asyncio.sleep(3)  # Give service time to stabilize
+            # Reset the Bluetooth adapter(s) before connecting
+            # This helps when the service restarts and an adapter is in a bad state
+            service_restarted = False
+            for adapter in self.device_manager.adapters():
+                logger.info(f"Initializing Bluetooth adapter {adapter}...")
+                if not await asyncio.to_thread(reset_bluetooth_adapter, adapter) and not service_restarted:
+                    logger.warning(f"Bluetooth adapter reset failed, trying service restart...")
+                    await asyncio.to_thread(restart_bluetooth_service)
+                    service_restarted = True
+                    await asyncio.sleep(3)  # Give service time to stabilize
             
             # Connect to all BT modules on startup
             logger.info("Establishing persistent connections to all BT modules...")
@@ -281,6 +286,14 @@ class RenogyMonitor:
                             device_data.config.mac_address,
                             False
                         )
+                
+                # Connection diagnostics, for every device whether it answered or not
+                for device_key, device_data in all_devices.items():
+                    self.mqtt_handler.publish_connection(
+                        device_data.config.name,
+                        device_data.config.mac_address,
+                        self.device_manager.connection_stats(device_key)
+                    )
                 
                 # Wait for next poll interval or shutdown
                 try:

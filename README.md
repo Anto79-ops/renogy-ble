@@ -118,6 +118,12 @@ bluetooth:
                    # Run 'hciconfig' to see available adapters
                    # Built-in Pi adapter is usually hci0
                    # USB adapters are usually hci1
+                   # With two adapters the names can swap between boots:
+                   # use the adapter's own address instead, as printed by
+                   # 'hciconfig' (BD Address), e.g. "AA:BB:CC:DD:EE:01"
+  auto_reset: true               # Reset the adapter by itself when a BT module
+                                 # stays unreachable (needs passwordless sudo)
+  reset_after_failed_polls: 3    # Polls in a row without a link before a reset
 
 # Device Configuration
 devices:
@@ -373,6 +379,23 @@ energy-storage inverter registers (4327+, 4398+, 4441+, 4543+) return
 Register maps: [Renogy Modbus documents collected in cyrils/renogy-bt discussion #94](https://github.com/cyrils/renogy-bt/discussions/94)
 (Rover Modbus, Lithium Iron Battery BMS Modbus Protocol V1.7, Inverter Modbus Protocol V1.8).
 
+### Connection Diagnostics (every device)
+
+Published to `renogy/<device>/connection` after every poll. They stay
+available while the device itself is unreachable, as long as the monitor runs.
+
+| Sensor | Meaning |
+|--------|---------|
+| Bluetooth Adapter Resets | Automatic resets of the adapter this device uses, since the monitor started |
+| Bluetooth Reconnects (24 h) | Times the link to its BT module dropped and was re-established in the last 24 hours (devices on one BT-2 hub share this) |
+| Failed Polls In A Row | Polls without data; 0 when all is well, 3 or more shows as unavailable |
+| Bluetooth Read Timeouts (24 h) | Register reads without a reply in the last 24 hours |
+| Last Connection Issue | The latest problem in words, with its time and the adapter as attributes |
+
+The 24-hour counts start from zero when the monitor restarts. A few reconnects
+and timeouts a day are normal; an automation can alert on a reset
+(`Bluetooth Adapter Resets` going up) or on unusually high counts.
+
 ## Troubleshooting
 
 ### Device Not Found
@@ -388,6 +411,51 @@ Register maps: [Renogy Modbus documents collected in cyrils/renogy-bt discussion
 2. Increase `CONNECTION_TIMEOUT` in `ble_client.py`
 3. Check for Bluetooth interference
 4. Try a long-range Bluetooth adapter (like LM0101)
+
+### Using Two Bluetooth Adapters
+
+Each BT module can use its own adapter, for example a long-range USB adapter
+for the module with the weaker signal and the built-in one for the other. Add
+`bluetooth_adapter` to that device (all devices on one BT-2 hub share an
+adapter):
+
+```yaml
+bluetooth:
+  adapter: "AA:BB:CC:DD:EE:01"            # default: the built-in adapter
+
+devices:
+  - name: "Solar Charge Controller"
+    mac_address: "XX:XX:XX:XX:XX:XX"
+    type: "controller"
+    bluetooth_adapter: "AA:BB:CC:DD:EE:02"  # the USB adapter
+```
+
+Use the adapters' addresses (`hciconfig`, BD Address) rather than `hci0` and
+`hci1`: with two adapters the names can swap between boots. If the adapter of
+a module is not present, that module uses the default adapter and the log says
+so. Compare the signal of each adapter with
+`python main.py --scan --adapter hci1`.
+
+A USB adapter that stays `DOWN` on Raspberry Pi OS is usually blocked by
+rfkill (`rfkill list`). The monitor lifts that block when it resets an adapter
+it is configured to use; by hand: `sudo rfkill unblock bluetooth`.
+
+### A Device Stops Reporting While the Others Keep Working
+
+When a BT module has had no working link for three polls in a row, the monitor
+resets the Bluetooth adapter and reconnects every module, which is what a
+service restart does. Look for `resetting Bluetooth adapter` in the log:
+
+```bash
+journalctl -u renogy-monitor | grep -i "resetting Bluetooth adapter"
+```
+
+A reset interrupts the other modules on the same adapter for about 15 seconds,
+so the wait between two resets doubles each time (10, 20, 40, then 60 minutes) and
+starts over once every module answers again. If resets do not bring the device
+back, the problem is at the module: check its signal (`python main.py --scan`)
+and unplug and replug the BT-1/BT-2. Set `bluetooth.auto_reset: false` to turn
+this off.
 
 ### MQTT Connection Failed
 
@@ -430,6 +498,30 @@ voltage slightly, or ignore battery alarms in your automations while SOC is 100%
 - Some older BT-1 modules may have compatibility issues
 
 ## Changelog
+
+### 1.4.0 (2026-11-22)
+- New: automatic recovery. When a BT module has had no working link for three
+  polls in a row, the monitor resets the Bluetooth adapter and reconnects all
+  modules, instead of failing until someone restarts the service. The wait
+  between resets grows from 10 to 60 minutes. Settings: `bluetooth.auto_reset`
+  and `bluetooth.reset_after_failed_polls`.
+- New: a BT module can use its own Bluetooth adapter (`bluetooth_adapter` per
+  device), and adapters can be given by address so the choice survives the
+  names swapping between boots. Each adapter is reset on its own, a missing
+  adapter falls back to the default, and an rfkill soft block on a configured
+  adapter is lifted.
+- New: connection diagnostics for every device in Home Assistant: adapter
+  resets, reconnects and read timeouts in the last 24 hours, failed polls in
+  a row, and the last connection issue. They keep updating while the device
+  is unreachable.
+- A module that will not reconnect no longer delays the others: modules with a
+  working link are polled first, and after the first failed poll a reconnect
+  is tried once per poll instead of three times (about 35 s instead of 115 s).
+- A link lost in the middle of a poll is retried once, not once per remaining
+  register.
+- Log: the link drops inside one connection attempt are counted in a single
+  line instead of about 20 "Disconnected!" lines, and a timeout is named
+  instead of logged as an empty error.
 
 ### 1.3.1 (2026-10-11)
 - Fix: stopping the service during a poll hung for about 90 seconds until
