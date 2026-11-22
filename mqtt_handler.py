@@ -222,6 +222,17 @@ BINARY_SENSOR_DEFINITIONS = {
 }
 
 
+# Connection diagnostics, one set per device. These stay available while the
+# device itself is unreachable: that is when they matter.
+CONNECTION_SENSOR_DEFINITIONS = [
+    {'key': 'adapter_resets', 'name': 'Bluetooth Adapter Resets', 'icon': 'mdi:restart-alert', 'state_class': 'total_increasing'},
+    {'key': 'reconnects_24h', 'name': 'Bluetooth Reconnects (24 h)', 'icon': 'mdi:bluetooth-connect', 'state_class': 'measurement'},
+    {'key': 'failed_polls', 'name': 'Failed Polls In A Row', 'icon': 'mdi:timer-alert-outline', 'state_class': 'measurement'},
+    {'key': 'timeouts_24h', 'name': 'Bluetooth Read Timeouts (24 h)', 'icon': 'mdi:timer-off-outline', 'state_class': 'measurement'},
+    {'key': 'last_issue', 'name': 'Last Connection Issue', 'icon': 'mdi:bluetooth-off'},
+]
+
+
 class MQTTHandler:
     """
     Handles MQTT communication and Home Assistant discovery.
@@ -338,7 +349,7 @@ class MQTTHandler:
             "name": device_name,
             "manufacturer": "Renogy",
             "model": model or device_type.title(),
-            "sw_version": "1.3.1",
+            "sw_version": "1.4.0",
         }
         
         # Get sensor definitions for this device type
@@ -729,6 +740,53 @@ class MQTTHandler:
         )
         
         logger.debug(f"Published validation stats for {device_name}: {stats.get('total_rejections', 0)} rejections")
+    
+    def publish_connection(self, device_name: str, mac_address: str,
+                           stats: Dict[str, Any]):
+        """
+        Publish the connection diagnostics of a device (adapter resets,
+        reconnects, failed polls, read timeouts, last issue).
+        
+        Unlike the readings, these depend only on the monitor running, so they
+        keep updating while the device is unreachable.
+        """
+        device_id = self._get_device_id(device_name, mac_address)
+        topic = f"{self.config.topic_prefix}/{device_id}/connection"
+        sent = self._discovery_sent.setdefault(device_id, set())
+        
+        for sensor in CONNECTION_SENSOR_DEFINITIONS:
+            key = f"connection_{sensor['key']}"
+            if key in sent:
+                continue
+            payload = {
+                "name": sensor['name'],
+                "unique_id": f"{device_id}_{key}",
+                "state_topic": topic,
+                "value_template": f"{{{{ value_json.{sensor['key']} }}}}",
+                "device": {"identifiers": [device_id], "name": device_name, "manufacturer": "Renogy"},
+                "availability_topic": self.bridge_topic,
+                "entity_category": "diagnostic",
+                "icon": sensor['icon'],
+            }
+            if sensor.get('state_class'):
+                payload["state_class"] = sensor['state_class']
+            if sensor['key'] == 'last_issue':
+                # ("None" as a state means "unknown" to Home Assistant)
+                payload["value_template"] = "{{ (value_json.last_issue or 'No issues since the monitor started')[:250] }}"
+                payload["json_attributes_topic"] = topic
+                payload["json_attributes_template"] = (
+                    "{{ {'time': value_json.last_issue_time, 'adapter': value_json.adapter} | tojson }}"
+                )
+            result = self.client.publish(
+                f"{self.config.discovery_prefix}/sensor/{device_id}/{key}/config",
+                json.dumps(payload),
+                qos=1,
+                retain=True
+            )
+            if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                sent.add(key)
+        
+        self.client.publish(topic, json.dumps(stats), qos=1, retain=True)
     
     @property
     def is_connected(self) -> bool:

@@ -8,9 +8,10 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
-# Change User and the paths below to your own user. On startup the monitor
-# resets the Bluetooth adapter with "sudo hciconfig", so this user needs
-# passwordless sudo (the default for the first user on Raspberry Pi OS).
+# Change User and the paths below to your own user. The monitor resets the
+# Bluetooth adapter with "sudo hciconfig" on startup and when a BT module stays
+# unreachable, so this user needs passwordless sudo (the default for the first
+# user on Raspberry Pi OS).
 User=pi
 WorkingDirectory=/home/pi/renogy_monitor
 # Give the Bluetooth service time to fully start

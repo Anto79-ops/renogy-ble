@@ -22,6 +22,12 @@ bluetooth:
                    # Run 'hciconfig' to see available adapters
                    # Built-in Pi adapter is usually hci0
                    # USB adapters are usually hci1
+                   # With two adapters the names can swap between boots:
+                   # use the adapter's own address instead, as printed by
+                   # 'hciconfig' (BD Address), e.g. "AA:BB:CC:DD:EE:01"
+  auto_reset: true               # Reset the adapter by itself when a BT module
+                                 # stays unreachable (needs passwordless sudo)
+  reset_after_failed_polls: 3    # Polls in a row without a link before a reset
 
 # Device Configuration
 # Each device should have:
@@ -45,10 +51,13 @@ devices:
   # Example: Charge Controller with BT-1
   - name: "Solar Charge Controller"
     mac_address: "XX:XX:XX:XX:XX:XX"
-    alias: "BT-TH-F25D5D87"
+    alias: "BT-TH-XXXXXXXX"
     type: "controller"
     device_id: 255  # Use 96 or 97 for Hub mode
-    adapter: "bt1"
+    adapter: "bt1"  # the BT module type (bt1 or bt2)
+    # Optional: a different Bluetooth adapter for this BT module only, by name
+    # or address. Devices on the same BT-2 hub share one adapter.
+    # bluetooth_adapter: "AA:BB:CC:DD:EE:02"
 
   # Example: Battery with BT-2 (Hub mode)
   # - name: "Main Battery"
